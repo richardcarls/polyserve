@@ -1,7 +1,7 @@
 use clap::Clap;
 use cascade::cascade;
 
-use polyserve::Server;
+use polyserve::{ Server, ServerError };
 
 #[derive(Debug, Clap)]
 #[clap(name = "polyserve")]
@@ -41,6 +41,16 @@ struct ServerOpt {
 }
 
 fn main() {
+    std::process::exit(match run_server() {
+        Ok(_) => 0,
+        Err(err) => {
+            eprintln!("Server Error: {:?}", err);
+            1
+        }
+    });
+}
+
+fn run_server() -> Result<(), ServerError> {
     let opt = ServerOpt::parse();
 
     let mut server = cascade! {
@@ -51,10 +61,10 @@ fn main() {
     };
 
     if let Some(root) = opt.root {
-        server.with_root(&root);
+        server.with_root(root.as_str());
     }
 
-    println!("{:?}", server);
+    server.listen()?;
 
-    server.listen();
+    Ok(())
 }

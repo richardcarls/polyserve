@@ -3,7 +3,9 @@ use std::default::Default;
 use std::net::ToSocketAddrs;
 use std::path::PathBuf;
 
-use super::ServerContext;
+use super::{ServerError, ServerContext };
+
+type Result<T> = std::result::Result<T, ServerError>;
 
 #[derive(Debug)]
 pub struct Server<S: ServerState> {
@@ -33,21 +35,18 @@ impl Server<Ready> {
         self.inner.root = root.to_owned();
     }
 
-    pub fn listen(self) -> Server<Listening> {
-        let addr = (self.inner.interface.as_str(), self.inner.port).to_socket_addrs()
-            .expect("Could not resolve bind interface IP")
+    pub fn listen(self) -> Result<Server<Listening>> {
+        let addr = (self.inner.interface.as_str(), self.inner.port).to_socket_addrs()?
             .find(|addr| {
                 if self.inner.ipv4 == true && !addr.is_ipv4() {
                     false
                 } else {
                     true
                 }
-            })
-            .expect("No suitable bind interface found.");
+            }).ok_or(ServerError::NoBindAddr)?;
 
         let root_dir = PathBuf::from(self.inner.root.as_str())
-            .canonicalize()
-            .expect("Could not resolve server root");
+            .canonicalize()?;
 
         println!("Serving {} at {}", root_dir.display(), addr);
         
@@ -56,12 +55,14 @@ impl Server<Ready> {
             root_dir,
         });
 
-        Server {
+        let server = Server {
             inner: Listening {
                 ready_state: self.inner,
                 context,
             }
-        }
+        };
+
+        Ok(server)
     }
 }
 
