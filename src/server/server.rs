@@ -3,9 +3,9 @@ use std::default::Default;
 use std::net::ToSocketAddrs;
 use std::path::PathBuf;
 
-use super::{ServerError, ServerContext };
+use super::{ Error, ErrorKind, ServerContext };
 
-type Result<T> = std::result::Result<T, ServerError>;
+type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug)]
 pub struct Server<S: ServerState> {
@@ -36,29 +36,31 @@ impl Server<Ready> {
     }
 
     pub fn listen(self) -> Result<Server<Listening>> {
-        let addr = (self.inner.interface.as_str(), self.inner.port).to_socket_addrs()?
+        let addr = (self.inner.interface.as_str(), self.inner.port).to_socket_addrs()
+            .map_err(|err| Error(ErrorKind::ResolveBindAddr(err)))?
             .find(|addr| {
                 if self.inner.ipv4 == true && !addr.is_ipv4() {
                     false
                 } else {
                     true
                 }
-            }).ok_or(ServerError::NoBindAddr)?;
+            }).ok_or(Error(ErrorKind::NoBindAddr))?;
 
         let root_dir = PathBuf::from(self.inner.root.as_str())
-            .canonicalize()?;
+            .canonicalize()
+            .map_err(|err| Error(ErrorKind::ResolveRootDir(err)))?;
 
         println!("Serving {} at {}", root_dir.display(), addr);
         
-        let context = Arc::new(ServerContext {
+        let context = ServerContext {
             addr,
             root_dir,
-        });
+        };
 
         let server = Server {
             inner: Listening {
                 ready_state: self.inner,
-                context,
+                context: Arc::new(context),
             }
         };
 

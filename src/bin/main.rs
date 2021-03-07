@@ -1,7 +1,7 @@
 use clap::Clap;
 use cascade::cascade;
 
-use polyserve::{ Server, ServerError };
+use polyserve::{ Server, Error as ServerError };
 
 #[derive(Debug, Clap)]
 #[clap(name = "polyserve")]
@@ -44,7 +44,7 @@ fn main() {
     std::process::exit(match run_server() {
         Ok(_) => 0,
         Err(err) => {
-            eprintln!("Server Error: {:?}", err);
+            eprintln!("Server Error: {}", err);
             1
         }
     });
