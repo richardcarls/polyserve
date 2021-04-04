@@ -16,4 +16,6 @@ path = "src/lib.rs"
 
 [dependencies]
 clap = { git = "https://github.com/clap-rs/clap/" }
+futures = "0.3"
 cascade = "1.0.0"
+async-std = "1.9"

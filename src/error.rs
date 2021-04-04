@@ -20,7 +20,9 @@ pub(crate) enum ErrorKind {
     ResolveBindAddr(io::Error),
     NoBindAddr,
     ResolveRootDir(io::Error),
+    BindAddr(io::Error),
     IOError(io::Error),
+    HttpParseError,
 }
 
 impl fmt::Display for ErrorKind {
@@ -32,8 +34,12 @@ impl fmt::Display for ErrorKind {
                 f.write_str("No suitable socket address found."),
             ErrorKind::ResolveRootDir(..) =>
                 f.write_str("Could not resolve server root."),
+            ErrorKind::BindAddr(..) =>
+                f.write_str("Could not bind socket address."),
             ErrorKind::IOError(..) =>
                 f.write_str("Encountered an unrecoverable I/O error."),
+            ErrorKind::HttpParseError =>
+                f.write_str("Could not parse HTTP message."),
         }
     }
 }
@@ -44,7 +50,9 @@ impl std::error::Error for ErrorKind {
             ErrorKind::ResolveBindAddr(ref err) => Some(err),
             ErrorKind::NoBindAddr => None,
             ErrorKind::ResolveRootDir(ref err) => Some(err),
+            ErrorKind::BindAddr(ref err) => Some(err),
             ErrorKind::IOError(ref err) => Some(err),
+            ErrorKind::HttpParseError => None,
         }
     }
 }

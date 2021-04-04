@@ -1,11 +1,13 @@
 use std::sync::Arc;
 use std::default::Default;
-use std::net::ToSocketAddrs;
 use std::path::PathBuf;
 
-use super::{ Error, ErrorKind, ServerContext };
+use futures::stream::StreamExt;
+use async_std::task;
+use async_std::net::{ TcpListener, ToSocketAddrs };
 
-type Result<T> = std::result::Result<T, Error>;
+use super::ServerContext;
+use crate::{ Result, Error, ErrorKind };
 
 #[derive(Debug)]
 pub struct Server<S: ServerState> {
@@ -36,35 +38,56 @@ impl Server<Ready> {
     }
 
     pub fn listen(self) -> Result<Server<Listening>> {
-        let addr = (self.inner.interface.as_str(), self.inner.port).to_socket_addrs()
-            .map_err(|err| Error(ErrorKind::ResolveBindAddr(err)))?
-            .find(|addr| {
-                if self.inner.ipv4 == true && !addr.is_ipv4() {
-                    false
-                } else {
-                    true
-                }
-            }).ok_or(Error(ErrorKind::NoBindAddr))?;
+        task::block_on(async {
+            let addr = (self.inner.interface.as_str(), self.inner.port)
+                .to_socket_addrs().await
+                .map_err(|err| Error(ErrorKind::ResolveBindAddr(err)))?
+                .find(|addr| {
+                    if self.inner.ipv4 == true && !addr.is_ipv4() {
+                        false
+                    } else {
+                        true
+                    }
+                }).ok_or(Error(ErrorKind::NoBindAddr))?;
 
-        let root_dir = PathBuf::from(self.inner.root.as_str())
-            .canonicalize()
-            .map_err(|err| Error(ErrorKind::ResolveRootDir(err)))?;
+            let root_dir = PathBuf::from(self.inner.root.as_str())
+                .canonicalize()
+                .map_err(|err| Error(ErrorKind::ResolveRootDir(err)))?;
 
-        println!("Serving {} at {}", root_dir.display(), addr);
-        
-        let context = ServerContext {
-            addr,
-            root_dir,
-        };
+            println!("Serving {} at {}", root_dir.display(), addr);
+            
+            let context = Arc::new(ServerContext {
+                addr,
+                root_dir,
+            });
 
-        let server = Server {
-            inner: Listening {
-                ready_state: self.inner,
-                context: Arc::new(context),
-            }
-        };
+            let tcp_listener = TcpListener::bind(addr).await
+                .map_err(|err| Error(ErrorKind::BindAddr(err)))?;
+            
+            let server = Server {
+                inner: Listening {
+                    ready_state: self.inner,
+                    context,
 
-        Ok(server)
+                    tcp_listener,
+                },
+            };
+
+            server.inner.tcp_listener.incoming()
+                .for_each_concurrent(None, |stream| async {
+                    if let Ok(stream) = stream {
+                        let context = Arc::clone(&server.inner.context);
+                    
+                        task::spawn(async move {
+                            if let Err(err) = context.handle_connection(stream).await {
+                                eprintln!("{:?}", err);
+                            };
+                        });
+                    }
+                }).await;
+
+            Ok(server)
+        })
     }
 }
 
@@ -99,6 +122,8 @@ impl Default for Ready {
 pub struct Listening {
     ready_state: Ready,
     context: Arc<ServerContext>,
+
+    tcp_listener: TcpListener,
 }
 
 pub trait ServerState {}
