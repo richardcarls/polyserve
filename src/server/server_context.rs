@@ -1,14 +1,10 @@
 use std::path::{ Path, PathBuf };
-use std::str::FromStr;
-
-use futures::io::BufReader;
 use async_std::net::{ SocketAddr,  TcpStream };
-use async_std::stream::StreamExt;
 use async_std::io::prelude::*;
 use async_std::fs;
 
 use crate::*;
-use crate::common::{ HttpMethod, HttpHeader };
+use crate::common::HttpMethod;
 
 #[derive(Debug)]
 pub(super) struct ServerContext {
@@ -26,31 +22,9 @@ impl ServerContext {
     }
 
     pub(super) async fn handle_connection(&self, mut stream: TcpStream) -> Result<()> {
-        let reader = BufReader::with_capacity(1024, &stream);
-        let mut lines = reader.lines();
+        let request = Request::from_stream(&stream).await?;
 
-        let request_line = match lines.next().await {
-            Some(line) => Ok(line),
-            None => Err(Error(ErrorKind::HttpParseError)),
-        }?
-        .unwrap();
-
-        let mut request = Request::from_request_line(request_line.as_ref())?;
-
-        while let Some(Ok(line)) = lines.next().await {
-            if line.is_empty() {
-                // End of request header
-                break;
-            }
-
-            if let Ok(header) = HttpHeader::from_str(line.as_ref()) {
-                request.headers.push(header);
-            }
-        }
-
-        // TODO: request body
-
-        println!("{}", request);
+        println!("{:?}", request);
 
         let (response, body) = match (request.method(), request.path()) {
             (HttpMethod::Get, ref path) => {

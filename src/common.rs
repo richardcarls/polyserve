@@ -1,7 +1,5 @@
 use std::str::FromStr;
-use std::path::PathBuf;
 use std::fmt;
-use std::io;
 
 // TODO: Wrap in struct to support new methods without major version bump
 // @See ServerError
@@ -64,41 +62,6 @@ impl FromStr for HttpVersion {
 impl fmt::Display for HttpVersion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "HTTP/{}.{}", self.0, self.1)
-    }
-}
-
-pub struct HttpRequestLine {
-    pub method: HttpMethod,
-    pub path: PathBuf,
-    pub http_version: HttpVersion,
-}
-
-impl FromStr for HttpRequestLine {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<HttpRequestLine, ()> {
-        let mut parts = s.split_whitespace();
-
-        let method = parts.next();
-        let path = parts.next();
-        let http_version = parts.next();
-
-        match (method, path, http_version) {
-            (Some(method), Some(path), Some(http_version)) => {
-                Ok(HttpRequestLine {
-                    method: HttpMethod::from_str(method).unwrap(),
-                    path: PathBuf::from(path),
-                    http_version: HttpVersion::from_str(http_version).unwrap(),
-                })
-            },
-            _ => Err(()),
-        }
-    }
-}
-
-impl fmt::Display for HttpRequestLine {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {} {}", self.method, self.path.display(), self.http_version)
     }
 }
 
