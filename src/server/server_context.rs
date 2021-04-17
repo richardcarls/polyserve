@@ -8,7 +8,7 @@ use async_std::io::prelude::*;
 use async_std::fs;
 
 use crate::*;
-use crate::common::{ HttpMethod, HttpVersion, HttpHeader };
+use crate::common::{ HttpMethod, HttpHeader };
 
 #[derive(Debug)]
 pub(super) struct ServerContext {
@@ -35,49 +35,27 @@ impl ServerContext {
         }?
         .unwrap();
 
-        let mut parts = request_line.split_whitespace();
+        let mut request = Request::from_request_line(request_line.as_ref())?;
 
-        let method = parts.next();
-        let path = parts.next();
-        let http_version = parts.next();
-        let headers = {
-            let mut headers = Vec::new();
-
-            while let Some(Ok(line)) = lines.next().await {
-                if line.is_empty() {
-                    // End of request header
-                    break;
-                }
-
-                if let Ok(header) = HttpHeader::from_str(line.as_ref()) {
-                    headers.push(header);
-                }
+        while let Some(Ok(line)) = lines.next().await {
+            if line.is_empty() {
+                // End of request header
+                break;
             }
 
-            headers
-        };
+            if let Ok(header) = HttpHeader::from_str(line.as_ref()) {
+                request.headers.push(header);
+            }
+        }
 
         // TODO: request body
 
-        let request = match (method, path, http_version) {
-            (Some(method), Some(path), Some(http_version)) => {
-                Ok(Request {
-                    method: HttpMethod::from_str(method).unwrap(),
-                    path: PathBuf::from(path),
-                    http_version: HttpVersion::from_str(http_version).unwrap(),
-                    headers,
-                })
-            },
-            _ => Err(Error(ErrorKind::HttpParseError)),
-        }?;
-
         println!("{}", request);
 
-        let (response, body) = match (request.method, request.path) {
+        let (response, body) = match (request.method(), request.path()) {
             (HttpMethod::Get, ref path) => {
-                let rel_path = path.strip_prefix("/")
-                    .unwrap_or(path);
-                
+                let rel_path: PathBuf = path.components().skip(1).collect();
+
                 let abs_path = self.root_dir().join(rel_path);
 
                 assert_eq!(abs_path.starts_with(self.root_dir()), true);
