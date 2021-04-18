@@ -26,7 +26,7 @@ impl ServerContext {
 
         println!("{}", request);
 
-        let (response, body) = match request.method() {
+        let (mut response, body) = match request.method() {
             HttpMethod::Get => {
                 let rel_path: PathBuf = request.path().components()
                     .skip(1)
@@ -38,17 +38,19 @@ impl ServerContext {
 
                 match fs::read(abs_path).await {
                     Ok(data) => {
-                        (Response::new(200, None), Some(data))
+                        (Response::new(200,), Some(data))
                     },
-                    Err(_) => (Response::new(404, None), None),
+                    Err(_) => (Response::new(404), None),
                 }
             },
-            _ => (Response::new(405, None), None),
+            _ => (Response::new(405), None),
         };
         
         response.write_head(&mut stream).await?;
 
         if let Some(body) = body {
+            response.set_header("Content-Length", vec![body.len().to_string()]);
+
             stream.write(&body).await.unwrap_or_default();
         }
 

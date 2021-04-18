@@ -1,38 +1,45 @@
 use std::fmt;
+use std::collections::HashMap;
 
 use async_std::io::prelude::*;
 use async_std::net::TcpStream;
 
-use crate::Result;
+use crate::{ Result, Error, ErrorKind };
 use super::common::{ HttpVersion, HttpStatusCode };
 
 pub struct Response {
     pub status_line: HttpStatusLine,
+    headers: HashMap<&'static str, Vec<String>>
 }
 
 impl Response {
-    pub fn new(status_code: u16, reason_phrase: Option<&str>) -> Self {
+    pub fn new(status_code: u16) -> Self {
         let http_version = HttpVersion(1, 1);
         let status_code = HttpStatusCode(status_code);
-        let reason_phrase = reason_phrase
-            .unwrap_or(status_code.default_reason_phrase())
-            .to_owned();
 
         let status_line = HttpStatusLine {
             http_version,
             status_code,
-            reason_phrase,
         };
+
+        let mut headers = HashMap::new();
+        headers.insert("Server", vec!["polyserve (rust)".to_owned()]);
 
         Response {
             status_line,
+            headers,
         }
+    }
+
+    pub fn set_header(&mut self, field: &'static str, values: Vec<String>) {
+        self.headers.insert(field, values);
     }
 
     pub async fn write_head(&self, stream: &mut TcpStream) -> Result<()> {
         let status_line = self.status_line.to_string();
 
-        stream.write(status_line.as_bytes()).await.unwrap_or_default();
+        stream.write(&[status_line.as_bytes(), b"\n"].concat()).await
+            .map_err(|err| Error(ErrorKind::HttpParseError))?;
 
         Ok(())
     }
@@ -41,7 +48,6 @@ impl Response {
 pub struct HttpStatusLine {
     http_version: HttpVersion,
     status_code: HttpStatusCode,
-    reason_phrase: String,
 }
 
 impl fmt::Display for HttpStatusLine {
@@ -51,7 +57,7 @@ impl fmt::Display for HttpStatusLine {
             "{} {} {}",
             self.http_version,
             self.status_code.0,
-            self.reason_phrase,
+            self.status_code.default_reason_phrase(),
         )
     }
 }
