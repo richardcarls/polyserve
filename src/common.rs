@@ -104,3 +104,20 @@ impl fmt::Display for HttpHeader {
         write!(f, "{}: {}", self.name, self.values.join(","))
     }
 }
+
+pub struct HttpStatusCode(pub u16);
+
+impl HttpStatusCode {
+    pub fn default_reason_phrase(&self) -> &'static str {
+        match self.0 {
+            200 => "OK",
+
+            404 => "Not Found",
+            405 => "Method Not Allowed",
+
+            500 => "Internal Server Error",
+
+            _ => "Unknown",
+        }
+    }
+}

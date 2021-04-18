@@ -4,7 +4,7 @@ use async_std::io::prelude::*;
 use async_std::fs;
 
 use crate::*;
-use crate::common::HttpMethod;
+use crate::common::{ HttpMethod, HttpStatusCode };
 
 #[derive(Debug)]
 pub(super) struct ServerContext {
@@ -24,11 +24,13 @@ impl ServerContext {
     pub(super) async fn handle_connection(&self, mut stream: TcpStream) -> Result<()> {
         let request = Request::from_stream(&stream).await?;
 
-        println!("{:?}", request);
+        println!("{}", request);
 
-        let (response, body) = match (request.method(), request.path()) {
-            (HttpMethod::Get, ref path) => {
-                let rel_path: PathBuf = path.components().skip(1).collect();
+        let (response, body) = match request.method() {
+            HttpMethod::Get => {
+                let rel_path: PathBuf = request.path().components()
+                    .skip(1)
+                    .collect();
 
                 let abs_path = self.root_dir().join(rel_path);
 
@@ -36,16 +38,16 @@ impl ServerContext {
 
                 match fs::read(abs_path).await {
                     Ok(data) => {
-                        ("HTTP/1.1 200 Ok\r\nServer: polyserve (Rust)\r\n\r\n", Some(data))
+                        (Response::new(200, None), Some(data))
                     },
-                    Err(_) => ("HTTP/1.1 404 Not Found\r\nServer: polyserve (Rust)\r\n\r\n", None),
+                    Err(_) => (Response::new(404, None), None),
                 }
             },
-            _ => ("HTTP/1.1 405 Method Not Allowed\r\nServer: polyserve (Rust)\r\n\r\n", None),
+            _ => (Response::new(405, None), None),
         };
         
-        stream.write(response.as_bytes()).await.unwrap_or_default();
-        
+        response.write_head(&mut stream).await?;
+
         if let Some(body) = body {
             stream.write(&body).await.unwrap_or_default();
         }
