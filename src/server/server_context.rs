@@ -26,7 +26,7 @@ impl ServerContext {
 
         println!("{}", request);
 
-        let (mut response, body) = match request.method() {
+        match request.method() {
             HttpMethod::Get => {
                 let rel_path: PathBuf = request.path().components()
                     .skip(1)
@@ -36,23 +36,20 @@ impl ServerContext {
 
                 assert_eq!(abs_path.starts_with(self.root_dir()), true);
 
-                match fs::read(abs_path).await {
-                    Ok(data) => {
-                        (Response::new(200,), Some(data))
+                match fs::File::open(abs_path).await {
+                    Ok(mut file) => {
+                        Response::new(200).send_file(&mut file, &mut stream).await?;
                     },
-                    Err(_) => (Response::new(404), None),
+                    Err(_) => {
+                        Response::new(404).send(&mut stream).await?;
+                    },
                 }
             },
-            _ => (Response::new(405), None),
+            
+            _ => {
+                Response::new(405).send(&mut stream).await?;
+            },
         };
-        
-        response.write_head(&mut stream).await?;
-
-        if let Some(body) = body {
-            response.set_header("Content-Length", vec![body.len().to_string()]);
-
-            stream.write(&body).await.unwrap_or_default();
-        }
 
         stream.flush().await.unwrap_or_default();
 

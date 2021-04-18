@@ -1,6 +1,8 @@
 use std::fmt;
 use std::collections::HashMap;
 
+use async_std::fs;
+use async_std::io;
 use async_std::io::prelude::*;
 use async_std::net::TcpStream;
 
@@ -35,11 +37,48 @@ impl Response {
         self.headers.insert(field, values);
     }
 
-    pub async fn write_head(&self, stream: &mut TcpStream) -> Result<()> {
+    pub async fn send(&mut self, stream: &mut TcpStream) -> Result<()> {
+        self.write_head(stream).await?;
+
+        Ok(())
+    }
+
+    pub async fn send_file(&mut self, file: &mut fs::File, stream: &mut TcpStream) -> Result<()> {
+        let metadata = file.metadata().await
+            .map_err(|err| Error(ErrorKind::IOError(err)))?;
+        
+        let file_size = metadata.len();
+
+        self.set_header("Content-Length", vec![file_size.to_string()]);
+
+        self.write_head(stream).await?;
+
+        io::copy(file, stream).await
+            .map_err(|err| Error(ErrorKind::IOError(err)))?;
+
+        Ok(())
+    }
+
+    async fn write_head(&self, stream: &mut TcpStream) -> Result<()> {
         let status_line = self.status_line.to_string();
 
         stream.write(&[status_line.as_bytes(), b"\n"].concat()).await
-            .map_err(|err| Error(ErrorKind::HttpParseError))?;
+            .map_err(|err| Error(ErrorKind::IOError(err)))?;
+        
+        for (field, values) in self.headers.iter() {
+            let header = [
+                field.as_bytes(),
+                b": ",
+                values.join(",").as_bytes(),
+                b"\n"
+            ].concat();
+
+            stream.write(&header).await
+                .map_err(|err| Error(ErrorKind::IOError(err)))?;
+        }
+
+        stream.write(b"\n").await
+            .map_err(|err| Error(ErrorKind::IOError(err)))?;
 
         Ok(())
     }
