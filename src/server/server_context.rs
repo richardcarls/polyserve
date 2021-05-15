@@ -4,7 +4,7 @@ use async_std::io::prelude::*;
 use async_std::fs;
 
 use crate::*;
-use crate::common::{ HttpMethod, HttpStatusCode };
+use crate::common::HttpMethod;
 
 #[derive(Debug)]
 pub(super) struct ServerContext {
@@ -26,7 +26,7 @@ impl ServerContext {
 
         println!("{}", request);
 
-        let resource_path = self.resolve(request.path()).await;
+        let resource_path = self.resolve(request.path());
 
         match (resource_path, request.method()) {
             (Ok(resource_path), HttpMethod::Get) => {
@@ -57,23 +57,53 @@ impl ServerContext {
         Ok(())
     }
 
-    pub(super) async fn resolve(&self, path: &Path) -> Result<PathBuf> {
-        let rel_path: PathBuf = path.components()
-            .skip(1)
-            .collect();
-
-        let abs_path = self.root_dir().join(rel_path);
+    pub(super) fn resolve(&self, path: &Path) -> Result<PathBuf> {
+        let abs_path = url_to_abs_path(self.root_dir(), path);
 
         if abs_path.starts_with(self.root_dir()) == true {
             match (abs_path.is_file(), abs_path.is_dir()) {
                 (true, _) => Ok(abs_path),
                 (_, true) => {
-                    Err(Error(ErrorKind::FeatureUnsupported("DirectoryIndex")))
+                    //Err(Error(ErrorKind::FeatureUnsupported("DirectoryIndex")))
+                    let index_path = format!("{}/index.html", path.display());
+
+                    self.resolve(Path::new(index_path.as_str()))
                 }
-                _ => Err(Error(ErrorKind::ResolveResource("Not found."))),
+                _ => {
+                    if abs_path.extension().is_none() {
+                        let supported_types = vec!("html", "md");
+
+                        let file_path = supported_types.iter()
+                            .map(|ext| {
+                                let test = format!("{}.{}", path.display(), ext);
+                                url_to_abs_path(self.root_dir(), Path::new(test.as_str()))
+                            })
+                            .find(|file_path| {
+                                file_path.is_file() && file_path.starts_with(self.root_dir())
+                            });
+                        
+                        if let Some(file_path) = file_path {
+                            Ok(file_path)
+                        } else {
+                            Err(Error(ErrorKind::ResolveResource("Not found.")))
+                        }
+                    } else {
+                        Err(Error(ErrorKind::ResolveResource("Not found.")))
+                    }
+                },
             }
         } else {
             Err(Error(ErrorKind::ResolveResource("Outside of server root!")))
         }
     }
+}
+
+fn url_to_abs_path(root: &Path, url: &Path) -> PathBuf {
+    let rel_path: PathBuf = url.components()
+        .skip(1)
+        .collect();
+
+    let abs_path = root.join(rel_path);
+
+    abs_path
 }
