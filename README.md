@@ -8,12 +8,12 @@ What can **polyserve** do?
  - Parse incoming HTTP requests (v1.x only at this time, request body not currently supported)
  - Handle HTTP GET requests (other methods not yet supported)
  - Serve files statically (by resolving request URLs to file paths)
+ - Support extension elision in request URLs (no extension required to resolve supported file types)
+ - Support explicit directory indexes (in any supported file type)
 
 What's next?
- - Support extension elision in request URLs (no extension required to resolve "supported" file types)
- - Support explicit directory index (index.html)
- - Render markdown files as HTML (only if extension is elided, otherwise send file)
- - Custom template for rendering markdown files (Handlebars)
+ - Render markdown files as HTML by default if extension is elided (configurable)
+ - Custom templates for rendering (Handlebars)
 
 ## Installation
 

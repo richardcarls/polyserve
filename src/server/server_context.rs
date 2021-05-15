@@ -58,43 +58,61 @@ impl ServerContext {
     }
 
     pub(super) fn resolve(&self, path: &Path) -> Result<PathBuf> {
+        let supported_types = vec!("html", "md");
         let abs_path = url_to_abs_path(self.root_dir(), path);
 
-        if abs_path.starts_with(self.root_dir()) == true {
-            match (abs_path.is_file(), abs_path.is_dir()) {
-                (true, _) => Ok(abs_path),
-                (_, true) => {
-                    //Err(Error(ErrorKind::FeatureUnsupported("DirectoryIndex")))
-                    let index_path = format!("{}/index.html", path.display());
-
-                    self.resolve(Path::new(index_path.as_str()))
-                }
-                _ => {
-                    if abs_path.extension().is_none() {
-                        let supported_types = vec!("html", "md");
-
-                        let file_path = supported_types.iter()
-                            .map(|ext| {
-                                let test = format!("{}.{}", path.display(), ext);
-                                url_to_abs_path(self.root_dir(), Path::new(test.as_str()))
-                            })
-                            .find(|file_path| {
-                                file_path.is_file() && file_path.starts_with(self.root_dir())
-                            });
-                        
-                        if let Some(file_path) = file_path {
-                            Ok(file_path)
-                        } else {
-                            Err(Error(ErrorKind::ResolveResource("Not found.")))
-                        }
-                    } else {
-                        Err(Error(ErrorKind::ResolveResource("Not found.")))
-                    }
-                },
-            }
-        } else {
-            Err(Error(ErrorKind::ResolveResource("Outside of server root!")))
+        if abs_path.starts_with(self.root_dir()) == false {
+            return Err(Error(ErrorKind::ResolveResource("Outside of server root!")))
         }
+
+        // Priority 1: Explicit file match
+        if abs_path.is_file() {
+            return Ok(abs_path)
+        }
+
+        let implicit_path = supported_types.iter()
+            .find_map(|ext| {
+                let test = format!("{}.{}", path.display(), ext);
+
+                self.resolve(Path::new(test.as_str())).ok()
+            });
+
+        
+        if let Some(abs_path) = implicit_path {
+            return Ok(abs_path)
+        }
+
+        // Priority 2: Implicit file match
+        if abs_path.extension().is_none() {
+            let implicit_path = supported_types.iter()
+                .find_map(|ext| {
+                    let test = format!("{}.{}", path.display(), ext);
+
+                    self.resolve(Path::new(test.as_str())).ok()
+                });
+
+            
+            if let Some(abs_path) = implicit_path {
+                return Ok(abs_path)
+            }
+        }
+
+        // Priority 3: Implicit directory index
+        if abs_path.is_dir() {
+            let implicit_path = supported_types.iter()
+                .find_map(|ext| {
+                    let test = format!("{}/index.{}", path.display(), ext);
+
+                    self.resolve(Path::new(test.as_str())).ok()
+                });
+
+            
+            if let Some(abs_path) = implicit_path {
+                return Ok(abs_path)
+            }
+        }
+
+        Err(Error(ErrorKind::ResolveResource("Not found.")))
     }
 }
 
