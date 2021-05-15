@@ -7,7 +7,7 @@ use async_std::task;
 use async_std::net::{ TcpListener, ToSocketAddrs };
 
 use super::ServerContext;
-use crate::{ Result, Error, ErrorKind };
+use crate::{ Result, Error, ErrorKind, Response };
 
 #[derive(Debug)]
 pub struct Server<S: ServerState> {
@@ -75,12 +75,14 @@ impl Server<Ready> {
 
             server.inner.tcp_listener.incoming()
                 .for_each_concurrent(None, |stream| async {
-                    if let Ok(stream) = stream {
+                    if let Ok(mut stream) = stream {
                         let context = Arc::clone(&server.inner.context);
                     
                         task::spawn(async move {
-                            if let Err(err) = context.handle_connection(stream).await {
-                                eprintln!("{:?}", err);
+                            if let Err(err) = context.handle_connection(&mut stream).await {
+                                eprintln!("Unhandled Error: {}", err);
+
+                                let _ = Response::new(500).send_empty(&mut stream).await;
                             };
                         });
                     }

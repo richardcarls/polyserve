@@ -22,7 +22,9 @@ pub(crate) enum ErrorKind {
     ResolveRootDir(io::Error),
     BindAddr(io::Error),
     IOError(io::Error),
-    HttpParseError,
+    HttpParse,
+    ResolveResource(&'static str),
+    FeatureUnsupported(&'static str),
 }
 
 impl fmt::Display for ErrorKind {
@@ -38,8 +40,12 @@ impl fmt::Display for ErrorKind {
                 f.write_str("Could not bind socket address."),
             ErrorKind::IOError(..) =>
                 f.write_str("Encountered an unrecoverable I/O error."),
-            ErrorKind::HttpParseError =>
+            ErrorKind::HttpParse =>
                 f.write_str("Could not parse HTTP message."),
+            ErrorKind::ResolveResource(ref msg) =>
+                write!(f, "Could not resolve the server resource: {}", msg),
+            ErrorKind::FeatureUnsupported(ref feature) =>
+                write!(f, "Feature currently unsupported: {}.", feature),
         }
     }
 }
@@ -52,7 +58,9 @@ impl std::error::Error for ErrorKind {
             ErrorKind::ResolveRootDir(ref err) => Some(err),
             ErrorKind::BindAddr(ref err) => Some(err),
             ErrorKind::IOError(ref err) => Some(err),
-            ErrorKind::HttpParseError => None,
+            ErrorKind::HttpParse => None,
+            ErrorKind::ResolveResource(_) => None,
+            ErrorKind::FeatureUnsupported(_) => None,
         }
     }
 }

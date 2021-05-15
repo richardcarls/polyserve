@@ -22,7 +22,7 @@ impl Request {
 
         let request_line = match lines.next().await {
             Some(line) => Ok(line),
-            None => Err(Error(ErrorKind::HttpParseError)),
+            None => Err(Error(ErrorKind::HttpParse)),
         }?
         .unwrap();
 
@@ -104,7 +104,7 @@ impl FromStr for HttpRequestLine {
                     http_version: HttpVersion::from_str(http_version).unwrap(),
                 })
             },
-            _ => Err(Error(ErrorKind::HttpParseError)),
+            _ => Err(Error(ErrorKind::HttpParse)),
         }
     }
 }

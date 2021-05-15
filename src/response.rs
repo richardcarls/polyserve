@@ -37,7 +37,10 @@ impl Response {
         self.headers.insert(field, values);
     }
 
-    pub async fn send(&mut self, stream: &mut TcpStream) -> Result<()> {
+    pub async fn send_empty(&mut self, stream: &mut TcpStream) -> Result<()> {
+        self.set_header("Content-Length", vec!["0".to_owned()]);
+        self.set_header("Content-Type", vec!["text/plain; charset=UTF-8".to_owned()]);
+        
         self.write_head(stream).await?;
 
         Ok(())
@@ -62,22 +65,22 @@ impl Response {
     async fn write_head(&self, stream: &mut TcpStream) -> Result<()> {
         let status_line = self.status_line.to_string();
 
-        stream.write(&[status_line.as_bytes(), b"\n"].concat()).await
+        stream.write(status_line.as_bytes()).await
             .map_err(|err| Error(ErrorKind::IOError(err)))?;
         
         for (field, values) in self.headers.iter() {
             let header = [
+                b"\n",
                 field.as_bytes(),
                 b": ",
                 values.join(",").as_bytes(),
-                b"\n"
             ].concat();
 
             stream.write(&header).await
                 .map_err(|err| Error(ErrorKind::IOError(err)))?;
         }
 
-        stream.write(b"\n").await
+        stream.write(b"\n\n").await
             .map_err(|err| Error(ErrorKind::IOError(err)))?;
 
         Ok(())

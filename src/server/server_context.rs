@@ -21,27 +21,34 @@ impl ServerContext {
         self.root_dir.as_path()
     }
 
-    pub(super) async fn handle_connection(&self, mut stream: TcpStream) -> Result<()> {
+    pub(super) async fn handle_connection(&self, stream: &mut TcpStream) -> Result<()> {
         let request = Request::from_stream(&stream).await?;
 
         println!("{}", request);
 
-        let abs_path = self.resolve(request.path()).await?;
+        let resource_path = self.resolve(request.path()).await;
 
-        match request.method() {
-            HttpMethod::Get => {
-                match fs::File::open(abs_path).await {
+        match (resource_path, request.method()) {
+            (Ok(resource_path), HttpMethod::Get) => {
+                match fs::File::open(resource_path).await {
                     Ok(mut file) => {
-                        Response::new(200).send_file(&mut file, &mut stream).await?;
+                        Response::new(200).send_file(&mut file, stream).await?;
                     },
-                    Err(_) => {
-                        Response::new(404).send(&mut stream).await?;
+                    Err(err) => {
+                        eprintln!("{}", err);
+                        Response::new(404).send_empty(stream).await?;
                     },
                 }
             },
+
+            (Err(err), _) => {
+                eprintln!("{}", err);
+
+                Response::new(404).send_empty(stream).await?;
+            },
             
             _ => {
-                Response::new(405).send(&mut stream).await?;
+                Response::new(405).send_empty(stream).await?;
             },
         };
 
@@ -58,9 +65,15 @@ impl ServerContext {
         let abs_path = self.root_dir().join(rel_path);
 
         if abs_path.starts_with(self.root_dir()) == true {
-            Ok(abs_path)
+            match (abs_path.is_file(), abs_path.is_dir()) {
+                (true, _) => Ok(abs_path),
+                (_, true) => {
+                    Err(Error(ErrorKind::FeatureUnsupported("DirectoryIndex")))
+                }
+                _ => Err(Error(ErrorKind::ResolveResource("Not found."))),
+            }
         } else {
-            Err(Error(ErrorKind::HttpParseError))
+            Err(Error(ErrorKind::ResolveResource("Outside of server root!")))
         }
     }
 }

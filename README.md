@@ -21,9 +21,13 @@ This project is not on crates.io yet! Clone this repo and build with rustc.
 
 ## Usage
 
+### CLI
+
 ```bash
 polyserve ./some-http-root
 ```
+
+### Library
 
 ```rust
 use polyserve::Server;
