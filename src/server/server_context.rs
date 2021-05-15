@@ -26,16 +26,10 @@ impl ServerContext {
 
         println!("{}", request);
 
+        let abs_path = self.resolve(request.path()).await?;
+
         match request.method() {
             HttpMethod::Get => {
-                let rel_path: PathBuf = request.path().components()
-                    .skip(1)
-                    .collect();
-
-                let abs_path = self.root_dir().join(rel_path);
-
-                assert_eq!(abs_path.starts_with(self.root_dir()), true);
-
                 match fs::File::open(abs_path).await {
                     Ok(mut file) => {
                         Response::new(200).send_file(&mut file, &mut stream).await?;
@@ -54,5 +48,19 @@ impl ServerContext {
         stream.flush().await.unwrap_or_default();
 
         Ok(())
+    }
+
+    pub(super) async fn resolve(&self, path: &Path) -> Result<PathBuf> {
+        let rel_path: PathBuf = path.components()
+            .skip(1)
+            .collect();
+
+        let abs_path = self.root_dir().join(rel_path);
+
+        if abs_path.starts_with(self.root_dir()) == true {
+            Ok(abs_path)
+        } else {
+            Err(Error(ErrorKind::HttpParseError))
+        }
     }
 }
