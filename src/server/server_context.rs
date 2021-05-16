@@ -3,6 +3,8 @@ use async_std::net::{ SocketAddr,  TcpStream };
 use async_std::io::prelude::*;
 use async_std::fs;
 
+use mime_guess;
+
 use crate::*;
 use crate::common::HttpMethod;
 
@@ -30,9 +32,15 @@ impl ServerContext {
 
         match (resource_path, request.method()) {
             (Ok(resource_path), HttpMethod::Get) => {
-                match fs::File::open(resource_path).await {
+                match fs::File::open(&resource_path).await {
                     Ok(mut file) => {
-                        Response::new(200).send_file(&mut file, stream).await?;
+                        let mut response = Response::new(200);
+
+                        if let Some(mime_type) = mime_guess::from_path(resource_path.as_path()).first() {
+                            response.set_header("Content-Type", vec!(mime_type.essence_str().to_owned()));
+                        }
+
+                        response.send_file(&mut file, stream).await?;
                     },
                     Err(err) => {
                         eprintln!("{}", err);
