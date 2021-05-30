@@ -555,6 +555,7 @@ dependencies = [
  "cascade",
  "clap",
  "futures",
+ "mime",
  "mime_guess",
 ]
 

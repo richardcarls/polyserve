@@ -1,7 +1,7 @@
 use std::str::FromStr;
 use std::fmt;
-use std::path::{ PathBuf, Path };
 
+use std::path::{ PathBuf, Path };
 use futures::io::BufReader;
 use async_std::io::prelude::*;
 use async_std::net::TcpStream;

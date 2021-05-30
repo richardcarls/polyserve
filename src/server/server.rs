@@ -1,6 +1,6 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::default::Default;
-use std::path::PathBuf;
 
 use futures::stream::StreamExt;
 use async_std::task;

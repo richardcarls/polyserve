@@ -3,6 +3,7 @@ mod error;
 mod server;
 mod request;
 mod response;
+mod resource;
 
 pub use server::*;
 pub use error::Error;
