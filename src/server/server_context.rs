@@ -27,18 +27,21 @@ impl ServerContext {
 
     println!("{}", request);
 
-    let file_resource = self.resolve(request.path());
-
-    match (file_resource, request.method()) {
-      (Ok(file_resource), HttpMethod::Get) => {
-        file_resource.respond(stream).await?;
+    match request.method() {
+      HttpMethod::Get => {
+        match self.resolve(request.path()) {
+          Ok(resource) => {
+            resource.respond(stream).await?;
+          },
+          Err(Error(ErrorKind::ResolveResource(_))) => {
+            Response::new(404).send_empty(stream).await?;
+          },
+          Err(err) => {
+            return Err(err);
+          },
+        }
       },
-
-      (Err(err), _) => {
-        eprintln!("{}", err);
-        Response::new(404).send_empty(stream).await?;
-      },
-
+      
       _ => {
         Response::new(405).send_empty(stream).await?;
       },
@@ -49,7 +52,7 @@ impl ServerContext {
     Ok(())
   }
 
-  pub(super) fn resolve (&self, path: &Path) -> Result<FileResource> {
+  pub(super) fn resolve (&self, path: &Path) -> Result<BoxedResource> {
     let supported_types = vec!["html", "md"];
     let rel_path: PathBuf = path.components().skip(1).collect();
 
@@ -61,7 +64,7 @@ impl ServerContext {
 
     // Priority 1: Explicit file match
     if let Ok(resource) = FileResource::from_path(abs_path.as_path()) {
-      return Ok(resource);
+      return Ok(resource.to_boxed());
     }
 
     // Priority 2: Implicit file match
@@ -72,8 +75,8 @@ impl ServerContext {
         self.resolve(Path::new(test.as_str())).ok()
       });
 
-      if let Some(resource) = implicit_resource {
-        return Ok(resource);
+      if let Some(boxed_resource) = implicit_resource {
+        return Ok(boxed_resource);
       }
     }
 
@@ -86,8 +89,8 @@ impl ServerContext {
         self.resolve(Path::new(test.as_str())).ok()
       });
 
-      if let Some(resource) = implicit_resource {
-        return Ok(resource);
+      if let Some(boxed_resource) = implicit_resource {
+        return Ok(boxed_resource);
       }
     }
 

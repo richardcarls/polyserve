@@ -3,10 +3,14 @@ use std::path::{Path, PathBuf};
 use async_std::fs;
 use async_std::net::TcpStream;
 
+use async_trait::async_trait;
+
 use mime;
 use mime_guess;
 
 use crate::{Result, Error, ErrorKind, Response};
+
+pub type BoxedResource = Box<dyn Resource + Send + Sync>;
 
 pub struct FileResource {
   pub(crate) abs_path: PathBuf,
@@ -30,13 +34,25 @@ impl FileResource {
     }
   }
 
-  pub async fn respond(self, stream: &mut TcpStream) -> Result<()> {
+  pub fn to_boxed(self) -> BoxedResource {
+    Box::new(self)
+  }
+}
+
+#[async_trait]
+impl Resource for FileResource {
+  async fn respond(&self, stream: &mut TcpStream) -> Result<()> {
     let mut file = fs::File::open(self.abs_path.as_path()).await
       .map_err(|err| Error(ErrorKind::IOError(err)))?;
 
     let mut response = Response::new(200);
-    response.set_header("Content-Type", vec![self.mime_type]);
+    response.set_header("Content-Type", vec![self.mime_type.to_owned()]);
 
     response.send_file(&mut file, stream).await
   }
+}
+
+#[async_trait]
+pub trait Resource {
+  async fn respond(&self, stream: &mut TcpStream) -> Result<()>;
 }

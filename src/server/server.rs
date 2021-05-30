@@ -80,7 +80,7 @@ impl Server<Ready> {
                     
                         task::spawn(async move {
                             if let Err(err) = context.handle_connection(&mut stream).await {
-                                eprintln!("Unhandled Error: {}", err);
+                                eprintln!("Unhandled Error: {:?}", err);
 
                                 let _ = Response::new(500).send_empty(&mut stream).await;
                             };
