@@ -12,6 +12,25 @@ use crate::{Result, Error, ErrorKind, Response};
 
 pub type BoxedResource = Box<dyn Resource + Send + Sync>;
 
+pub struct EmptyResource {}
+
+impl EmptyResource {
+  pub fn new() -> Self {
+    EmptyResource {}
+  }
+
+  pub fn to_boxed(self) -> BoxedResource {
+    Box::new(self)
+  }
+}
+
+#[async_trait]
+impl Resource for EmptyResource {
+  async fn respond(&self, stream: &mut TcpStream) -> Result<()> {
+    Response::new(404).send_empty(stream).await
+  }
+}
+
 pub struct FileResource {
   pub(crate) abs_path: PathBuf,
   pub(crate) mime_type: String,

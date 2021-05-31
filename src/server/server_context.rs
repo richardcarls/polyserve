@@ -41,7 +41,7 @@ impl ServerContext {
           },
         }
       },
-      
+
       _ => {
         Response::new(405).send_empty(stream).await?;
       },
@@ -52,7 +52,18 @@ impl ServerContext {
     Ok(())
   }
 
-  pub(super) fn resolve (&self, path: &Path) -> Result<BoxedResource> {
+  pub(super) fn exists_file(&self, path: &Path) -> Option<PathBuf> {
+    let rel_path: PathBuf = path.components().skip(1).collect();
+
+    let abs_path = self.root_dir().join(rel_path);
+
+    match abs_path.is_file() {
+      true => Some(abs_path),
+      false => None,
+    }
+  }
+
+  pub(super) fn resolve(&self, path: &Path) -> Result<BoxedResource> {
     let supported_types = vec!["html", "md"];
     let rel_path: PathBuf = path.components().skip(1).collect();
 
@@ -69,31 +80,36 @@ impl ServerContext {
 
     // Priority 2: Implicit file match
     if abs_path.extension().is_none() {
-      let implicit_resource = supported_types.iter().find_map(|ext| {
+      let implicit_path = supported_types.iter().find_map(|ext| {
         let test = format!("{}.{}", path.display(), ext);
 
-        self.resolve(Path::new(test.as_str())).ok()
+        self.exists_file(Path::new(test.as_str()))
       });
 
-      if let Some(boxed_resource) = implicit_resource {
-        return Ok(boxed_resource);
+      if let Some(abs_path) = implicit_path {
+        if let Ok(resource) = FileResource::from_path(abs_path.as_path()) {
+          return Ok(resource.to_boxed());
+        }
       }
     }
 
     // Priority 3: Implicit directory index
     // TODO: Resource set Content-Location header and 301 redirect to trailing slash URL
     if abs_path.is_dir() {
-      let implicit_resource = supported_types.iter().find_map(|ext| {
+      let implicit_path = supported_types.iter().find_map(|ext| {
         let test = format!("{}/index.{}", path.display(), ext);
 
-        self.resolve(Path::new(test.as_str())).ok()
+        self.exists_file(Path::new(test.as_str()))
       });
 
-      if let Some(boxed_resource) = implicit_resource {
-        return Ok(boxed_resource);
+      if let Some(abs_path) = implicit_path {
+        if let Ok(resource) = FileResource::from_path(abs_path.as_path()) {
+          return Ok(resource.to_boxed());
+        }
       }
     }
 
-    Err(Error(ErrorKind::ResolveResource("Not found.")))
+    //Err(Error(ErrorKind::ResolveResource("Not found.")))
+    Ok(EmptyResource::new().to_boxed())
   }
 }
