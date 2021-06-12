@@ -15,6 +15,12 @@ impl fmt::Debug for Error {
     }
 }
 
+impl From<io::Error> for Error {
+  fn from(err: io::Error) -> Error {
+    Error(err.into())
+  }
+}
+
 #[derive(Debug)]
 pub(crate) enum ErrorKind {
     ResolveBindAddr(io::Error),

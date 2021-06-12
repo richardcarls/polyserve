@@ -56,8 +56,7 @@ impl Response {
 
         self.write_head(stream).await?;
 
-        io::copy(file, stream).await
-            .map_err(|err| Error(ErrorKind::IOError(err)))?;
+        io::copy(file, stream).await?;
 
         Ok(())
     }
@@ -65,8 +64,7 @@ impl Response {
     async fn write_head(&self, stream: &mut TcpStream) -> Result<()> {
         let status_line = self.status_line.to_string();
 
-        stream.write(status_line.as_bytes()).await
-            .map_err(|err| Error(ErrorKind::IOError(err)))?;
+        stream.write(status_line.as_bytes()).await?;
         
         for (field, values) in self.headers.iter() {
             let header = [
@@ -76,12 +74,10 @@ impl Response {
                 values.join(",").as_bytes(),
             ].concat();
 
-            stream.write(&header).await
-                .map_err(|err| Error(ErrorKind::IOError(err)))?;
+            stream.write(&header).await?;
         }
 
-        stream.write(b"\n\n").await
-            .map_err(|err| Error(ErrorKind::IOError(err)))?;
+        stream.write(b"\n\n").await?;
 
         Ok(())
     }

@@ -56,6 +56,9 @@ impl Server<Ready> {
 
             println!("Serving {} at {}", root_dir.display(), addr);
             
+            let tcp_listener = TcpListener::bind(addr).await
+                .map_err(|err| Error(ErrorKind::BindAddr(err)))?;
+            
             let context = Arc::new(ServerContext {
                 addr,
                 root_dir,
@@ -75,7 +78,8 @@ impl Server<Ready> {
 
             server.inner.tcp_listener.incoming()
                 .for_each_concurrent(None, |stream| async {
-                    if let Ok(mut stream) = stream {
+                    match stream {
+                        Ok(mut stream) => {
                         let context = Arc::clone(&server.inner.context);
                     
                         task::spawn(async move {
@@ -85,6 +89,9 @@ impl Server<Ready> {
                                 let _ = Response::new(500).send_empty(&mut stream).await;
                             };
                         });
+                        },
+
+                        Err(err) => eprintln!("Connection failed: {:?}", err),
                     }
                 }).await;
 

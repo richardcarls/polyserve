@@ -61,8 +61,7 @@ impl FileResource {
 #[async_trait]
 impl Resource for FileResource {
   async fn respond(&self, stream: &mut TcpStream) -> Result<()> {
-    let mut file = fs::File::open(self.abs_path.as_path()).await
-      .map_err(|err| Error(ErrorKind::IOError(err)))?;
+    let mut file = fs::File::open(self.abs_path.as_path()).await?;
 
     let mut response = Response::new(200);
     response.set_header("Content-Type", vec![self.mime_type.to_owned()]);
