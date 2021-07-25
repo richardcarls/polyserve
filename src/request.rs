@@ -1,7 +1,8 @@
 use std::str::FromStr;
 use std::fmt;
-
 use std::path::{ PathBuf, Path };
+
+use futures::AsyncBufRead;
 use futures::io::BufReader;
 use async_std::io::prelude::*;
 use async_std::net::TcpStream;
@@ -47,6 +48,41 @@ impl Request {
             request_line,
             headers,
         })
+    }
+
+    pub async fn from_reader<R>(reader: &mut R) -> Result<Self>
+    where
+      R: AsyncBufRead + Unpin,
+    {
+      let mut lines = reader.lines();
+
+      let request_line = match lines.next().await {
+          Some(line) => Ok(line),
+          None => Err(Error(ErrorKind::HttpParse)),
+      }?
+      .unwrap();
+
+      let request_line = HttpRequestLine::from_str(request_line.as_ref())?;
+
+      let mut headers = Vec::new();
+
+      while let Some(Ok(line)) = lines.next().await {
+          if line.is_empty() {
+              // End of request header
+              break;
+          }
+
+          if let Ok(header) = HttpHeader::from_str(line.as_ref()) {
+              headers.push(header);
+          }
+      };
+
+      // TODO: Content-Length, Transfer-Encoding, body
+
+      Ok(Request {
+          request_line,
+          headers,
+      })
     }
 
     pub fn method(&self) -> &HttpMethod {

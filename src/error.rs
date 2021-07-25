@@ -1,6 +1,8 @@
 use std::io;
 use std::fmt;
 
+use async_native_tls;
+
 pub struct Error(pub(crate) ErrorKind);
 
 impl fmt::Display for Error {
@@ -15,6 +17,12 @@ impl fmt::Debug for Error {
     }
 }
 
+impl From<async_native_tls::AcceptError> for Error {
+  fn from(err: async_native_tls::AcceptError) -> Error {
+    Error(err.into())
+  }
+}
+
 impl From<io::Error> for Error {
   fn from(err: io::Error) -> Error {
     Error(err.into())
@@ -27,6 +35,7 @@ pub(crate) enum ErrorKind {
     NoBindAddr,
     ResolveRootDir(io::Error),
     BindAddr(io::Error),
+    TlsError(async_native_tls::AcceptError),
     IOError(io::Error),
     HttpParse,
     ResolveResource(&'static str),
@@ -44,6 +53,8 @@ impl fmt::Display for ErrorKind {
                 f.write_str("Could not resolve server root."),
             ErrorKind::BindAddr(..) =>
                 f.write_str("Could not bind socket address."),
+            ErrorKind::TlsError(ref err) =>
+                write!(f, "TLS Error: {:?}", err),
             ErrorKind::IOError(..) =>
                 f.write_str("Encountered an unrecoverable I/O error."),
             ErrorKind::HttpParse =>
@@ -63,12 +74,19 @@ impl std::error::Error for ErrorKind {
             ErrorKind::NoBindAddr => None,
             ErrorKind::ResolveRootDir(ref err) => Some(err),
             ErrorKind::BindAddr(ref err) => Some(err),
+            ErrorKind::TlsError(ref err) => Some(err),
             ErrorKind::IOError(ref err) => Some(err),
             ErrorKind::HttpParse => None,
             ErrorKind::ResolveResource(_) => None,
             ErrorKind::FeatureUnsupported(_) => None,
         }
     }
+}
+
+impl From<async_native_tls::AcceptError> for ErrorKind {
+  fn from(err: async_native_tls::AcceptError) -> ErrorKind {
+    ErrorKind::TlsError(err)
+  }
 }
 
 impl From<io::Error> for ErrorKind {

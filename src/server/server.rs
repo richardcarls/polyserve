@@ -1,13 +1,17 @@
-use std::path::PathBuf;
-use std::sync::Arc;
 use std::default::Default;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
-use futures::stream::StreamExt;
+use async_native_tls::{Identity, TlsAcceptor};
+use async_std::fs;
+use async_std::io;
+use async_std::net::{TcpListener, ToSocketAddrs};
 use async_std::task;
-use async_std::net::{ TcpListener, ToSocketAddrs };
+use futures::stream::StreamExt;
+use futures::AsyncReadExt;
 
 use super::ServerContext;
-use crate::{ Result, Error, ErrorKind, Response };
+use crate::{Error, ErrorKind, Response, Result};
 
 #[derive(Debug)]
 pub struct Server<S: ServerState> {
@@ -40,7 +44,8 @@ impl Server<Ready> {
     pub fn listen(self) -> Result<Server<Listening>> {
         task::block_on(async {
             let addr = (self.inner.interface.as_str(), self.inner.port)
-                .to_socket_addrs().await
+                .to_socket_addrs()
+                .await
                 .map_err(|err| Error(ErrorKind::ResolveBindAddr(err)))?
                 .find(|addr| {
                     if self.inner.ipv4 == true && !addr.is_ipv4() {
@@ -48,52 +53,81 @@ impl Server<Ready> {
                     } else {
                         true
                     }
-                }).ok_or(Error(ErrorKind::NoBindAddr))?;
+                })
+                .ok_or(Error(ErrorKind::NoBindAddr))?;
 
             let root_dir = PathBuf::from(self.inner.root.as_str())
                 .canonicalize()
                 .map_err(|err| Error(ErrorKind::ResolveRootDir(err)))?;
 
             println!("Serving {} at {}", root_dir.display(), addr);
-            
-            let tcp_listener = TcpListener::bind(addr).await
-                .map_err(|err| Error(ErrorKind::BindAddr(err)))?;
-            
-            let context = Arc::new(ServerContext {
-                addr,
-                root_dir,
-            });
 
-            let tcp_listener = TcpListener::bind(addr).await
+            // TLS
+            // TODO: Put behind flag and configuration options for identity/key+cert
+            let id_path = root_dir.join(Path::new(".identity.pfx"));
+            let tls_acceptor = if id_path.is_file() {
+                let mut id_file = fs::File::open(id_path).await?;
+
+                // TODO: Identity file passwords besides empty string
+                Some(Arc::new(TlsAcceptor::new(id_file, "").await?))
+            } else {
+                None
+            };
+
+            let tcp_listener = TcpListener::bind(addr)
+                .await
                 .map_err(|err| Error(ErrorKind::BindAddr(err)))?;
-            
+
+            let context = Arc::new(ServerContext { addr, root_dir });
+
             let server = Server {
                 inner: Listening {
                     ready_state: self.inner,
                     context,
 
+                    tls_acceptor,
                     tcp_listener,
                 },
             };
 
-            server.inner.tcp_listener.incoming()
+            server
+                .inner
+                .tcp_listener
+                .incoming()
                 .for_each_concurrent(None, |stream| async {
                     match stream {
                         Ok(mut stream) => {
-                        let context = Arc::clone(&server.inner.context);
-                    
-                        task::spawn(async move {
-                            if let Err(err) = context.handle_connection(&mut stream).await {
-                                eprintln!("Unhandled Error: {:?}", err);
+                            let context = Arc::clone(&server.inner.context);
 
-                                let _ = Response::new(500).send_empty(&mut stream).await;
-                            };
-                        });
+                            if let Some(tls_acceptor) = &server.inner.tls_acceptor.clone() {
+                                let mut tls_stream = tls_acceptor
+                                    .clone()
+                                    .accept(stream)
+                                    .await
+                                    .unwrap();
+                                
+                                task::spawn(async move {
+                                    if let Err(err) = context.handle_connection(&mut tls_stream).await {
+                                        eprintln!("Unhandled Error: {:?}", err);
+
+                                        let _ = Response::empty(500).end(&mut tls_stream).await;
+                                    }
+                                });
+                            } else {
+                                task::spawn(async move {
+                                    if let Err(err) = context.handle_connection(&mut stream).await {
+                                        eprintln!("Unhandled Error: {:?}", err);
+
+                                        let _ = Response::empty(500).end(&mut stream).await;
+                                    }
+                                });
+                            }
                         },
 
                         Err(err) => eprintln!("Connection failed: {:?}", err),
                     }
-                }).await;
+                })
+                .await;
 
             Ok(server)
         })
@@ -127,11 +161,11 @@ impl Default for Ready {
     }
 }
 
-#[derive(Debug)]
 pub struct Listening {
     ready_state: Ready,
     context: Arc<ServerContext>,
 
+    tls_acceptor: Option<Arc<TlsAcceptor>>,
     tcp_listener: TcpListener,
 }
 

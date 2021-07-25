@@ -1,21 +1,21 @@
-use std::fmt;
 use std::collections::HashMap;
+use std::fmt;
 
 use async_std::fs;
 use async_std::io;
 use async_std::io::prelude::*;
-use async_std::net::TcpStream;
+use futures::{AsyncRead, AsyncWrite};
 
-use crate::{ Result, Error, ErrorKind };
-use super::common::{ HttpVersion, HttpStatusCode };
+use super::common::{HttpStatusCode, HttpVersion};
+use crate::Result;
 
 pub struct Response {
     pub status_line: HttpStatusLine,
-    headers: HashMap<&'static str, Vec<String>>
+    headers: HashMap<&'static str, Vec<String>>,
 }
 
 impl Response {
-    pub fn new(status_code: u16) -> Self {
+    fn new(status_code: u16) -> Self {
         let http_version = HttpVersion(1, 1);
         let status_code = HttpStatusCode(status_code);
 
@@ -33,51 +33,60 @@ impl Response {
         }
     }
 
-    pub fn set_header(&mut self, field: &'static str, values: Vec<String>) {
-        self.headers.insert(field, values);
+    pub fn empty(status_code: u16) -> Self {
+        let mut response = Self::new(status_code);
+
+        response.set_header("Content-Length", vec!["0".to_owned()]);
+        response.set_header("Content-Type", vec!["text/plain; charset=UTF-8".to_owned()]);
+
+        response
     }
 
-    pub async fn send_empty(&mut self, stream: &mut TcpStream) -> Result<()> {
-        self.set_header("Content-Length", vec!["0".to_owned()]);
-        self.set_header("Content-Type", vec!["text/plain; charset=UTF-8".to_owned()]);
-        
-        self.write_head(stream).await?;
+    pub async fn from_file(status_code: u16, mut file: fs::File) -> Result<Self> {
+        let mut response = Self::new(status_code);
 
-        Ok(())
-    }
+        let metadata = file.metadata().await?;
 
-    pub async fn send_file(&mut self, file: &mut fs::File, stream: &mut TcpStream) -> Result<()> {
-        let metadata = file.metadata().await
-            .map_err(|err| Error(ErrorKind::IOError(err)))?;
-        
         let file_size = metadata.len();
 
-        self.set_header("Content-Length", vec![file_size.to_string()]);
+        response.set_header("Content-Length", vec![file_size.to_string()]);
 
-        self.write_head(stream).await?;
+        //response.body = file;
 
-        io::copy(file, stream).await?;
-
-        Ok(())
+        Ok(response)
     }
 
-    async fn write_head(&self, stream: &mut TcpStream) -> Result<()> {
+    async fn write_head<W>(&self, stream: &mut W) -> Result<()>
+    where
+        W: AsyncWrite + Unpin,
+    {
         let status_line = self.status_line.to_string();
 
         stream.write(status_line.as_bytes()).await?;
-        
+
         for (field, values) in self.headers.iter() {
-            let header = [
-                b"\n",
-                field.as_bytes(),
-                b": ",
-                values.join(",").as_bytes(),
-            ].concat();
+            let header = [b"\n", field.as_bytes(), b": ", values.join(",").as_bytes()].concat();
 
             stream.write(&header).await?;
         }
 
         stream.write(b"\n\n").await?;
+
+        Ok(())
+    }
+
+    pub fn set_header(&mut self, field: &'static str, values: Vec<String>) {
+        self.headers.insert(field, values);
+    }
+
+    pub async fn end<W>(self, stream: &mut W) -> Result<()>
+    where
+        W: AsyncWrite + Unpin,
+    {
+        self.write_head(stream).await?;
+
+        // TODO: If data, write to stream
+        //io::copy(file, stream).await?;
 
         Ok(())
     }

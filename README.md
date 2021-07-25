@@ -14,6 +14,7 @@ What can **polyserve** do?
 What's next?
  - Render markdown files as HTML by default if extension is elided (configurable)
  - Custom templates for rendering (Handlebars)
+ - Support for TLS connections
 
 ## Installation
 
