@@ -98,17 +98,19 @@ impl Server<Ready> {
                             let context = Arc::clone(&server.inner.context);
 
                             if let Some(tls_acceptor) = &server.inner.tls_acceptor.clone() {
-                                let mut tls_stream = tls_acceptor
-                                    .clone()
-                                    .accept(stream)
-                                    .await
-                                    .unwrap();
+                                let tls_stream = tls_acceptor.clone();
                                 
                                 task::spawn(async move {
-                                    if let Err(err) = context.handle_connection(&mut tls_stream).await {
-                                        eprintln!("Unhandled Error: {:?}", err);
+                                    match tls_stream.accept(stream).await {
+                                        Ok(mut tls_stream) => {
+                                            if let Err(err) = context.handle_connection(&mut tls_stream).await {
+                                                eprintln!("Unhandled Error: {:?}", err);
+        
+                                                let _ = Response::new(500).send_empty(&mut tls_stream).await;
+                                            }
+                                        },
 
-                                        let _ = Response::new(500).send_empty(&mut tls_stream).await;
+                                        Err(err) => eprintln!("Unhandled Error: {:?}", err),
                                     }
                                 });
                             } else {
