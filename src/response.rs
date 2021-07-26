@@ -4,7 +4,7 @@ use std::fmt;
 use async_std::fs;
 use async_std::io;
 use async_std::io::prelude::*;
-use futures::{AsyncRead, AsyncWrite};
+use futures::AsyncWrite;
 
 use super::common::{HttpStatusCode, HttpVersion};
 use crate::Result;
@@ -15,7 +15,7 @@ pub struct Response {
 }
 
 impl Response {
-    fn new(status_code: u16) -> Self {
+    pub fn new(status_code: u16) -> Self {
         let http_version = HttpVersion(1, 1);
         let status_code = HttpStatusCode(status_code);
 
@@ -31,29 +31,6 @@ impl Response {
             status_line,
             headers,
         }
-    }
-
-    pub fn empty(status_code: u16) -> Self {
-        let mut response = Self::new(status_code);
-
-        response.set_header("Content-Length", vec!["0".to_owned()]);
-        response.set_header("Content-Type", vec!["text/plain; charset=UTF-8".to_owned()]);
-
-        response
-    }
-
-    pub async fn from_file(status_code: u16, mut file: fs::File) -> Result<Self> {
-        let mut response = Self::new(status_code);
-
-        let metadata = file.metadata().await?;
-
-        let file_size = metadata.len();
-
-        response.set_header("Content-Length", vec![file_size.to_string()]);
-
-        //response.body = file;
-
-        Ok(response)
     }
 
     async fn write_head<W>(&self, stream: &mut W) -> Result<()>
@@ -79,14 +56,30 @@ impl Response {
         self.headers.insert(field, values);
     }
 
-    pub async fn end<W>(self, stream: &mut W) -> Result<()>
+    pub async fn send_empty<W>(mut self, stream: &mut W) -> Result<()>
     where
         W: AsyncWrite + Unpin,
     {
+        self.set_header("Content-Length", vec!["0".to_owned()]);
+        self.set_header("Content-Type", vec!["text/plain; charset=UTF-8".to_owned()]);
+
         self.write_head(stream).await?;
 
-        // TODO: If data, write to stream
-        //io::copy(file, stream).await?;
+        Ok(())
+    }
+
+    pub async fn send_file<W>(mut self, mut file: fs::File, stream: &mut W) -> Result<()>
+    where
+        W: AsyncWrite + Unpin,
+    {
+        let metadata = file.metadata().await?;
+        let file_size = metadata.len();
+
+        self.set_header("Content-Length", vec![file_size.to_string()]);
+
+        self.write_head(stream).await?;
+
+        io::copy(&mut file, stream).await?;
 
         Ok(())
     }

@@ -2,13 +2,11 @@ use std::default::Default;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use async_native_tls::{Identity, TlsAcceptor};
+use async_native_tls::TlsAcceptor;
 use async_std::fs;
-use async_std::io;
 use async_std::net::{TcpListener, ToSocketAddrs};
 use async_std::task;
 use futures::stream::StreamExt;
-use futures::AsyncReadExt;
 
 use super::ServerContext;
 use crate::{Error, ErrorKind, Response, Result};
@@ -66,7 +64,7 @@ impl Server<Ready> {
             // TODO: Put behind flag and configuration options for identity/key+cert
             let id_path = root_dir.join(Path::new(".identity.pfx"));
             let tls_acceptor = if id_path.is_file() {
-                let mut id_file = fs::File::open(id_path).await?;
+                let id_file = fs::File::open(id_path).await?;
 
                 // TODO: Identity file passwords besides empty string
                 Some(Arc::new(TlsAcceptor::new(id_file, "").await?))
@@ -110,7 +108,7 @@ impl Server<Ready> {
                                     if let Err(err) = context.handle_connection(&mut tls_stream).await {
                                         eprintln!("Unhandled Error: {:?}", err);
 
-                                        let _ = Response::empty(500).end(&mut tls_stream).await;
+                                        let _ = Response::new(500).send_empty(&mut tls_stream).await;
                                     }
                                 });
                             } else {
@@ -118,7 +116,7 @@ impl Server<Ready> {
                                     if let Err(err) = context.handle_connection(&mut stream).await {
                                         eprintln!("Unhandled Error: {:?}", err);
 
-                                        let _ = Response::empty(500).end(&mut stream).await;
+                                        let _ = Response::new(500).send_empty(&mut stream).await;
                                     }
                                 });
                             }
