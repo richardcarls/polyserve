@@ -11,6 +11,7 @@ use crate::Result;
 
 pub struct Response {
     pub status_line: HttpStatusLine,
+    // TODO: Store &str instead?
     headers: HashMap<&'static str, Vec<String>>,
 }
 

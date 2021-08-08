@@ -1,13 +1,14 @@
-use std::str::FromStr;
 use std::fmt;
-use std::path::{ PathBuf, Path };
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
-use futures::AsyncBufRead;
 use async_std::io::prelude::*;
+use async_std::io::BufReader;
 use async_std::stream::StreamExt;
+use futures::AsyncRead;
 
-use crate::{ Result, Error, ErrorKind };
 use super::common::*;
+use crate::{Error, ErrorKind, Result};
 
 pub struct Request {
     pub request_line: HttpRequestLine,
@@ -15,46 +16,48 @@ pub struct Request {
 }
 
 impl Request {
-    pub async fn from_reader<R>(reader: &mut R) -> Result<Self>
+    pub async fn read_from<R>(stream: &mut R) -> Result<Self>
     where
-      R: AsyncBufRead + Unpin,
+        R: AsyncRead + Unpin,
     {
-      let mut lines = reader.lines();
+        let reader = BufReader::with_capacity(1024, stream);
 
-      let request_line = match lines.next().await {
-          Some(line) => Ok(line),
-          None => Err(Error(ErrorKind::HttpParse)),
-      }??;
+        let mut lines = reader.lines();
 
-      let request_line = HttpRequestLine::from_str(request_line.as_ref())?;
+        let request_line = match lines.next().await {
+            Some(line) => Ok(line),
+            None => Err(Error(ErrorKind::HttpParse)),
+        }??;
 
-      let mut headers = Vec::new();
+        let request_line = HttpRequestLine::from_str(request_line.as_ref())?;
 
-      while let Some(Ok(line)) = lines.next().await {
-          if line.is_empty() {
-              // End of request header
-              break;
-          }
+        let mut headers = Vec::new();
 
-          if let Ok(header) = HttpHeader::from_str(line.as_ref()) {
-              headers.push(header);
-          }
-      };
+        while let Some(Ok(line)) = lines.next().await {
+            if line.is_empty() {
+                // End of request header
+                break;
+            }
 
-      // TODO: Content-Length, Transfer-Encoding, body
+            if let Ok(header) = HttpHeader::from_str(line.as_ref()) {
+                headers.push(header);
+            }
+        }
 
-      Ok(Request {
-          request_line,
-          headers,
-      })
+        // TODO: Content-Length, Transfer-Encoding, body
+
+        Ok(Request {
+            request_line,
+            headers,
+        })
     }
 
     pub fn method(&self) -> &HttpMethod {
         &self.request_line.method
     }
 
-    pub fn path(&self) -> &Path {
-        self.request_line.path.as_path()
+    pub fn path(&self) -> &str {
+        self.request_line.path.as_str()
     }
 
     pub fn http_version(&self) -> &HttpVersion {
@@ -65,7 +68,6 @@ impl Request {
 impl fmt::Debug for Request {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}\n", self.request_line)?;
-        
         for header in &self.headers {
             write!(f, "{}\n", header)?;
         }
@@ -82,7 +84,7 @@ impl fmt::Display for Request {
 
 pub struct HttpRequestLine {
     pub method: HttpMethod,
-    pub path: PathBuf,
+    pub path: String,
     pub http_version: HttpVersion,
 }
 
@@ -97,13 +99,11 @@ impl FromStr for HttpRequestLine {
         let http_version = parts.next();
 
         match (method, path, http_version) {
-            (Some(method), Some(path), Some(http_version)) => {
-                Ok(HttpRequestLine {
-                    method: HttpMethod::from_str(method).unwrap(),
-                    path: PathBuf::from(path),
-                    http_version: HttpVersion::from_str(http_version).unwrap(),
-                })
-            },
+            (Some(method), Some(path), Some(http_version)) => Ok(HttpRequestLine {
+                method: HttpMethod::from_str(method).unwrap(),
+                path: String::from(path),
+                http_version: HttpVersion::from_str(http_version).unwrap(),
+            }),
             _ => Err(Error(ErrorKind::HttpParse)),
         }
     }
@@ -111,6 +111,12 @@ impl FromStr for HttpRequestLine {
 
 impl fmt::Display for HttpRequestLine {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {} {}", self.method, self.path.display(), self.http_version)
+        write!(
+            f,
+            "{} {} {}",
+            self.method,
+            self.path,
+            self.http_version
+        )
     }
 }
