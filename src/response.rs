@@ -84,6 +84,18 @@ impl Response {
 
         Ok(())
     }
+
+    pub async fn send_str<W>(mut self, s: &str, stream: &mut W) -> Result<()>
+    where
+        W: AsyncWrite + Unpin,
+    {
+        self.set_header("Content-Length", vec![s.len().to_string()]);
+        self.write_head(stream).await?;
+
+        stream.write(s.as_bytes()).await?;
+
+        Ok(())
+    }
 }
 
 pub struct HttpStatusLine {

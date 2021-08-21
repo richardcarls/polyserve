@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <title>index of {{name}}</title>
+    </head>
+    <body>
+        <h1>index of {{name}}</h1>
+        <!-- TODO: Ancestors -->
+
+        <table cellpadding="4" cellspacing="1" border="1" width="100%">
+            <thead>
+                <tr>
+                    <th>Type</th>
+                    <th align="left">Name</th>
+                    <th align="right">Last Modified</th>
+                    <th align="right">Size</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td align="center">D</td>
+                    <td><a href=".">.</a></td>
+                    <td align="right"></td>
+                    <td align="right"></td>
+                </tr>
+                <tr>
+                    <td align="center">D</td>
+                    <td><a href="..">..</a></td>
+                    <td align="right"></td>
+                    <td align="right"></td>
+                </tr>
+                {{#each entries as |entry|}}
+                <tr>
+                    <td align="center">{{#if entry.metadata.is_dir}}D{{else}}F{{/if}}</td>
+                    <td><a href="{{entry.name}}">{{entry.name}}</a></td>
+                    <td align="right">{{entry.metadata.modified}}</td>
+                    <td align="right">{{entry.metadata.len}}</td>
+                </tr>
+                {{/each}}
+            </tbody>
+        </table>
+    </body>
+</html>
