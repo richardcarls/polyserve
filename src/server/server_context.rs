@@ -2,18 +2,20 @@ use std::path::{Path, PathBuf};
 
 use futures::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use async_std::net::SocketAddr;
+use handlebars::Handlebars;
 
 use crate::common::HttpMethod;
 use crate::resource::*;
 use crate::*;
 
 #[derive(Debug)]
-pub(super) struct ServerContext {
-    pub(super) addr: SocketAddr,
-    pub(super) root_dir: PathBuf,
+pub struct ServerContext<'ctx> {
+    pub addr: SocketAddr,
+    pub root_dir: PathBuf,
+    pub hbs: Handlebars<'ctx>,
 }
 
-impl ServerContext {
+impl<'ctx> ServerContext<'ctx> {
     pub fn addr(&self) -> &SocketAddr {
         &self.addr
     }
@@ -32,7 +34,7 @@ impl ServerContext {
 
         match request.method() {
             HttpMethod::Get => match Resource::from_request(self.root_dir(), request) {
-                Ok(resource) => resource.respond(&mut stream).await?,
+                Ok(resource) => resource.respond(self, &mut stream).await?,
 
                 Err(Error(ErrorKind::ResolveResource(_))) => {
                     Response::new(404).send_empty(&mut stream).await?;

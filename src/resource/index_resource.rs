@@ -1,32 +1,25 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use futures::AsyncWrite;
 use async_trait::async_trait;
-use serde_json;
-use chrono::{DateTime, Utc};
-use handlebars::Handlebars;
 
-use crate::{Error, ErrorKind, Response, Result};
-use super::Respond;
-
-const INDEX_TEMPLATE: &'static str = include_str!("../index.html.hbs");
+use crate::{ServerContext, Response, Result};
+use super::{ResourceContext, Respond};
 
 pub struct IndexResource {
     pub abs_path: PathBuf,
     pub url_path: String,
     pub is_implicit: bool,
+    pub context: ResourceContext,
 }
 
 #[async_trait]
 impl Respond for IndexResource {
-    async fn respond<W>(self, stream: &mut W) -> Result<()>
+    async fn respond<W>(self, context: &ServerContext, stream: &mut W) -> Result<()>
     where
         W: AsyncWrite + Unpin + Send,
     {
         println!("Serving index for {}", self.url_path);
-
-        // TODO: ServerContext hbs register
-        let mut hbs = Handlebars::new();
 
         let mut url_path = self.url_path;
         
@@ -34,75 +27,8 @@ impl Respond for IndexResource {
             .map(|seg| seg.as_os_str().to_str().unwrap_or(""))
             .last()
             .unwrap_or("/");
-        
-        let entries: Vec<serde_json::Value> = self.abs_path.read_dir()?
-            .filter_map(|entry| entry.ok())
-            .map(|entry| {
-                let unknown = "(unknown)".to_owned();
 
-                let entry_name = entry.file_name().to_owned().into_string()
-                    .unwrap_or(unknown.clone());
-
-                serde_json::json!({
-                    "name": entry_name,
-                    "abs_path": entry.path(),
-                    "metadata": match entry.metadata() {
-                        Ok(meta) => {
-                            let modified = match meta.modified() {
-                                Ok(st) => {
-                                    let dt: DateTime<Utc> = st.clone().into();
-
-                                    format!("{}", dt.format("%+"))
-                                },
-                                _ => unknown.clone()
-                            };
-
-                            let accessed = match meta.accessed() {
-                                Ok(st) => {
-                                    let dt: DateTime<Utc> = st.clone().into();
-
-                                    format!("{}", dt.format("%+"))
-                                },
-                                _ => unknown.clone()
-                            };
-
-                            let created = match meta.created() {
-                                Ok(st) => {
-                                    let dt: DateTime<Utc> = st.clone().into();
-
-                                    format!("{}", dt.format("%+"))
-                                },
-                                _ => unknown.clone()
-                            };
-
-                            serde_json::json!({
-                                "is_dir": meta.is_dir(),
-                                "is_file": meta.is_file(),
-                                "len": meta.len(),
-                                "readonly": meta.permissions().readonly(),
-                                "modified": modified,
-                                "accessed": accessed,
-                                "created": created,
-                            })
-                        },
-
-                        Err(_) => serde_json::json!({}),
-                    },
-                })
-            })
-            .collect();
-        
-        // TODO: Current dir metadata
-        // TODO: Ancestors
-        let context = serde_json::json!({
-            "name": dir_name,
-            "entries": entries,
-        });
-
-        println!("{}", context);
-
-        let html = hbs.render_template(INDEX_TEMPLATE, &context)
-            .map_err(|_| Error(ErrorKind::ResolveResource("")))?;
+        let html = context.hbs.render("index", &self.context)?;
         
         let mut response = match url_path.ends_with("/") {
             true => Response::new(200),

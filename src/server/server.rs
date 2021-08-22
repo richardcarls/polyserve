@@ -7,9 +7,12 @@ use async_std::fs;
 use async_std::net::{TcpListener, ToSocketAddrs};
 use async_std::task;
 use futures::stream::StreamExt;
+use handlebars::Handlebars;
 
 use super::ServerContext;
 use crate::{Error, ErrorKind, Response, Result};
+
+const INDEX_TEMPLATE: &'static str = include_str!("../index.html.hbs");
 
 #[derive(Debug)]
 pub struct Server<S: ServerState> {
@@ -39,7 +42,7 @@ impl Server<Ready> {
         self.inner.root = root.to_owned();
     }
 
-    pub fn listen(self) -> Result<Server<Listening>> {
+    pub fn listen<'ctx>(self) -> Result<Server<Listening<'ctx>>> {
         task::block_on(async {
             let addr = (self.inner.interface.as_str(), self.inner.port)
                 .to_socket_addrs()
@@ -60,6 +63,11 @@ impl Server<Ready> {
 
             println!("Serving {} at {}", root_dir.display(), addr);
 
+            let mut hbs = Handlebars::new();
+
+            // TODO: Support global index template override
+            let _ = hbs.register_template_string("index", INDEX_TEMPLATE);
+
             // TLS
             // TODO: Put behind flag and configuration options for identity/key+cert
             let id_path = root_dir.join(Path::new(".identity.pfx"));
@@ -76,7 +84,7 @@ impl Server<Ready> {
                 .await
                 .map_err(|err| Error(ErrorKind::BindAddr(err)))?;
 
-            let context = Arc::new(ServerContext { addr, root_dir });
+            let context = Arc::new(ServerContext { addr, root_dir, hbs });
 
             let server = Server {
                 inner: Listening {
@@ -134,7 +142,7 @@ impl Server<Ready> {
     }
 }
 
-impl Server<Listening> {
+impl<'ctx> Server<Listening<'ctx>> {
     pub fn disconnect(self) -> Server<Ready> {
         Server {
             inner: self.inner.ready_state,
@@ -161,9 +169,9 @@ impl Default for Ready {
     }
 }
 
-pub struct Listening {
+pub struct Listening<'ctx> {
     ready_state: Ready,
-    context: Arc<ServerContext>,
+    context: Arc<ServerContext<'ctx>>,
 
     tls_acceptor: Option<Arc<TlsAcceptor>>,
     tcp_listener: TcpListener,
@@ -171,4 +179,4 @@ pub struct Listening {
 
 pub trait ServerState {}
 impl ServerState for Ready {}
-impl ServerState for Listening {}
+impl<'ctx> ServerState for Listening<'ctx> {}

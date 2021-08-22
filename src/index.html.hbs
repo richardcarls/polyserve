@@ -30,12 +30,12 @@
                     <td align="right"></td>
                     <td align="right"></td>
                 </tr>
-                {{#each entries as |entry|}}
+                {{#each children as |child|}}
                 <tr>
-                    <td align="center">{{#if entry.metadata.is_dir}}D{{else}}F{{/if}}</td>
-                    <td><a href="{{entry.name}}">{{entry.name}}</a></td>
-                    <td align="right">{{entry.metadata.modified}}</td>
-                    <td align="right">{{entry.metadata.len}}</td>
+                    <td align="center">{{#if child.metadata.is_dir}}D{{else}}F{{/if}}</td>
+                    <td><a href="{{child.name}}">{{child.name}}</a></td>
+                    <td align="right">{{child.metadata.modified}}</td>
+                    <td align="right">{{child.metadata.len}}</td>
                 </tr>
                 {{/each}}
             </tbody>

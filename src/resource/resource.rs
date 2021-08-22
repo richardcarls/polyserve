@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 use futures::AsyncWrite;
 use async_trait::async_trait;
 
-use crate::{Error, ErrorKind, Request, Response, Result};
-use super::{FileResource, IndexResource};
+use crate::{ServerContext, Error, ErrorKind, Request, Response, Result};
+use super::{Respond, ResourceContext, FileResource, IndexResource};
 
 const SUPPORTED_TYPES: [&str; 2] = ["html", "md"];
 
@@ -34,11 +34,13 @@ impl Resource {
 
         // Priority 1: Explicit file match
         if abs_path.is_file() {
+            let context = ResourceContext::from_path(abs_path.as_path())?;
             let resource = FileResource {
                 abs_path,
                 url_path,
                 is_implicit,
                 is_index,
+                context,
             };
 
             return Ok(Self::File(resource));
@@ -56,11 +58,13 @@ impl Resource {
 
             if let Some(abs_path) = implicit_path {
                 if abs_path.is_file() {
+                    let context = ResourceContext::from_path(abs_path.as_path())?;
                     let resource = FileResource {
                         abs_path,
                         url_path,
                         is_implicit,
                         is_index,
+                        context,
                     };
                     
                     return Ok(Self::File(resource));
@@ -80,11 +84,13 @@ impl Resource {
 
             if let Some(abs_path) = implicit_path {
                 if abs_path.is_file() {
+                    let context = ResourceContext::from_path(abs_path.as_path())?;
                     let resource = FileResource {
                         abs_path,
                         url_path,
                         is_implicit,
                         is_index,
+                        context,
                     };
                     
                     return Ok(Self::File(resource));
@@ -93,22 +99,24 @@ impl Resource {
 
             // Priority 4: Generated directory index
             // TODO: configuration to allow/block generated indexes
+            let context = ResourceContext::from_path(abs_path.as_path())?;
             let resource = IndexResource {
                 abs_path,
                 url_path,
                 is_implicit,
+                context,
             };
             
             return Ok(Self::Index(resource));
         }
 
-        Err(Error(ErrorKind::ResolveResource("Not found.")))
+        Ok(Self::None)
     }
 }
 
 #[async_trait]
 impl Respond for Resource {
-    async fn respond<W>(self, stream: &mut W) -> Result<()>
+    async fn respond<W>(self, context: &ServerContext, stream: &mut W) -> Result<()>
     where
         W: AsyncWrite + Unpin + Send,
     {
@@ -116,19 +124,11 @@ impl Respond for Resource {
             Self::None => {
                 Response::new(200).send_empty(stream).await
             },
-            Self::File(resource) => resource.respond(stream).await,
-            Self::Index(resource) => resource.respond(stream).await,
+            Self::File(resource) => resource.respond(context, stream).await,
+            Self::Index(resource) => resource.respond(context, stream).await,
         }
     }
 }
-
-#[async_trait]
-pub trait Respond {
-    async fn respond<W>(self, stream: &mut W) -> Result<()>
-    where
-        W: AsyncWrite + Unpin + Send;
-}
-
 
 fn exists_file(root_dir: &Path, path: &Path) -> Option<PathBuf> {
     let rel_path: PathBuf = path.components().skip(1).collect();

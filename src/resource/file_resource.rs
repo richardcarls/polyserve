@@ -6,19 +6,20 @@ use async_trait::async_trait;
 use mime;
 use mime_guess;
 
-use crate::{Response, Result};
-use super::Respond;
+use crate::{ServerContext, Response, Result};
+use super::{ResourceContext, Respond};
 
 pub struct FileResource {
     pub abs_path: PathBuf,
     pub url_path: String,
     pub is_implicit: bool,
     pub is_index: bool,
+    pub context: ResourceContext,
 }
 
 #[async_trait]
 impl Respond for FileResource {
-    async fn respond<W>(self, stream: &mut W) -> Result<()>
+    async fn respond<W>(self, context: &ServerContext, stream: &mut W) -> Result<()>
     where
         W: AsyncWrite + Unpin + Send,
     {
