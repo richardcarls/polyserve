@@ -71,6 +71,20 @@ pub struct HttpHeader {
     pub values: Vec<String>,
 }
 
+impl HttpHeader {
+    pub fn new(name: &str, values: &[&str]) -> Self {
+        let values: Vec<String> = values
+            .iter()
+            .map(|&s| s.to_owned())
+            .collect();
+
+        HttpHeader{
+            name: name.to_owned(),
+            values,
+        }
+    }
+}
+
 impl FromStr for HttpHeader {
     type Err = ();
 
@@ -119,5 +133,11 @@ impl HttpStatusCode {
 
             _ => "Unknown",
         }
+    }
+}
+
+impl From<u16> for HttpStatusCode {
+    fn from(value: u16) -> Self {
+        Self(value)
     }
 }

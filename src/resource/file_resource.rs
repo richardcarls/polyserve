@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use mime;
 use mime_guess;
 
-use crate::{ServerContext, Response, Result};
+use crate::{Context, Response, Result};
 use super::{ResourceContext, Respond};
 
 pub struct FileResource {
@@ -19,7 +19,7 @@ pub struct FileResource {
 
 #[async_trait]
 impl Respond for FileResource {
-    async fn respond<W>(self, context: &ServerContext, stream: &mut W) -> Result<()>
+    async fn respond<W>(self, ctx: &Context, stream: &mut W) -> Result<()>
     where
         W: AsyncWrite + Unpin + Send,
     {
@@ -28,9 +28,9 @@ impl Respond for FileResource {
 
         let mime_type = mime_guess::from_path(abs_path)
             .first()
-            .unwrap_or(mime::TEXT_PLAIN_UTF_8)
-            .essence_str()
-            .to_owned();
+            .unwrap_or(mime::TEXT_PLAIN_UTF_8);
+        
+        let mime_type = mime_type.essence_str();
         
         let file = fs::File::open(abs_path).await?;
 
@@ -43,17 +43,11 @@ impl Respond for FileResource {
                     let mut response = Response::new(301);
 
                     // Tell client to redirect
-                    response.set_header(
-                        "Location",
-                        vec![url_path.to_owned()]
-                    );
+                    response.set_header("Location", &[url_path.as_str()]);
 
                     // Tell client actual location of file
                     // TODO: For implicit index pages, give full file poth here
-                    response.set_header(
-                        "Content-Location",
-                        vec![url_path.to_owned()]
-                    );
+                    response.set_header("Content-Location", &[url_path.as_str()]);
 
                     response
                 } else {
@@ -64,7 +58,7 @@ impl Respond for FileResource {
             false => Response::new(200)
         };
 
-        response.set_header("Content-Type", vec![mime_type.to_owned()]);
+        response.set_header("Content-Type", &[mime_type]);
 
         response.send_file(file, stream).await
     } 

@@ -7,7 +7,7 @@ use async_std::io::BufReader;
 use async_std::stream::StreamExt;
 use futures::AsyncRead;
 
-use super::common::*;
+use crate::common::*;
 use crate::{Error, ErrorKind, Result};
 
 pub struct Request {

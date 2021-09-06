@@ -1,18 +1,17 @@
-use std::collections::HashMap;
 use std::fmt;
+use std::str::FromStr;
 
 use async_std::fs;
 use async_std::io;
 use async_std::io::prelude::*;
 use futures::AsyncWrite;
 
-use super::common::{HttpStatusCode, HttpVersion};
+use crate::common::*;
 use crate::Result;
 
 pub struct Response {
     pub status_line: HttpStatusLine,
-    // TODO: Store &str instead?
-    headers: HashMap<&'static str, Vec<String>>,
+    pub headers: Vec<HttpHeader>,
 }
 
 impl Response {
@@ -25,8 +24,8 @@ impl Response {
             status_code,
         };
 
-        let mut headers = HashMap::new();
-        headers.insert("Server", vec!["polyserve (rust)".to_owned()]);
+        let mut headers = Vec::new();
+        headers.push(HttpHeader::new("Server", &["polyserve (rust)"]));
 
         Response {
             status_line,
@@ -42,8 +41,8 @@ impl Response {
 
         stream.write(status_line.as_bytes()).await?;
 
-        for (field, values) in self.headers.iter() {
-            let header = [b"\n", field.as_bytes(), b": ", values.join(",").as_bytes()].concat();
+        for header in self.headers.iter() {
+            let header = [b"\n", header.name.as_bytes(), b": ", header.values.join(",").as_bytes()].concat();
 
             stream.write(&header).await?;
         }
@@ -53,16 +52,18 @@ impl Response {
         Ok(())
     }
 
-    pub fn set_header(&mut self, field: &'static str, values: Vec<String>) {
-        self.headers.insert(field, values);
+    pub fn set_header(&mut self, name: &str, values: &[&str]) {
+        let header = HttpHeader::new(name, values);
+
+        self.headers.push(header);
     }
 
     pub async fn send_empty<W>(mut self, stream: &mut W) -> Result<()>
     where
         W: AsyncWrite + Unpin,
     {
-        self.set_header("Content-Length", vec!["0".to_owned()]);
-        self.set_header("Content-Type", vec!["text/plain; charset=UTF-8".to_owned()]);
+        self.set_header("Content-Length", &["0"]);
+        self.set_header("Content-Type", &["text/plain; charset=UTF-8"]);
 
         self.write_head(stream).await?;
 
@@ -76,7 +77,7 @@ impl Response {
         let metadata = file.metadata().await?;
         let file_size = metadata.len();
 
-        self.set_header("Content-Length", vec![file_size.to_string()]);
+        self.set_header("Content-Length", &[file_size.to_string().as_str()]);
 
         self.write_head(stream).await?;
 
@@ -89,12 +90,35 @@ impl Response {
     where
         W: AsyncWrite + Unpin,
     {
-        self.set_header("Content-Length", vec![s.len().to_string()]);
+        self.set_header("Content-Length", &[s.len().to_string().as_str()]);
         self.write_head(stream).await?;
 
         stream.write(s.as_bytes()).await?;
 
         Ok(())
+    }
+}
+
+impl Default for Response {
+    fn default() -> Self {
+        Self::new(404)
+    }
+}
+
+impl fmt::Debug for Response {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}\n", self.status_line)?;
+        for header in &self.headers {
+            write!(f, "{}\n", header)?;
+        }
+
+        write!(f, "\n")
+    }
+}
+
+impl fmt::Display for Response {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.status_line)
     }
 }
 

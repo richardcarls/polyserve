@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use futures::AsyncWrite;
 use async_trait::async_trait;
 
-use crate::{ServerContext, Error, ErrorKind, Request, Response, Result};
+use crate::{Context, Error, ErrorKind, Request, Response, Result};
 use super::{Respond, ResourceContext, FileResource, IndexResource};
 
 const SUPPORTED_TYPES: [&str; 2] = ["html", "md"];
@@ -15,7 +15,9 @@ pub enum Resource {
 }
 
 impl Resource {
-    pub fn from_request(root_dir: &Path, request: Request) -> Result<Self> {
+    pub fn resolve(ctx: &Context) -> Result<Self> {
+        let Context { request, .. } = ctx;
+
         let url_path = request.path().to_owned();
 
         let rel_path: PathBuf = PathBuf::from(request.path())
@@ -23,9 +25,9 @@ impl Resource {
             .skip(1) // Remove leading slash
             .collect();
 
-        let abs_path = root_dir.join(rel_path);
+        let abs_path = ctx.root_dir().join(rel_path);
 
-        if abs_path.starts_with(root_dir) == false {
+        if abs_path.starts_with(ctx.root_dir()) == false {
             return Err(Error(ErrorKind::ResolveResource("Outside of root dir!")));
         }
 
@@ -53,7 +55,7 @@ impl Resource {
             let implicit_path = SUPPORTED_TYPES.iter().find_map(|ext| {
                 let test = format!("{}.{}", url_path, ext);
 
-                exists_file(root_dir, Path::new(test.as_str()))
+                exists_file(ctx.root_dir(), Path::new(test.as_str()))
             });
 
             if let Some(abs_path) = implicit_path {
@@ -79,7 +81,7 @@ impl Resource {
             let implicit_path = SUPPORTED_TYPES.iter().find_map(|ext| {
                 let test = format!("{}/index.{}", url_path, ext);
 
-                exists_file(root_dir, Path::new(test.as_str()))
+                exists_file(ctx.root_dir(), Path::new(test.as_str()))
             });
 
             if let Some(abs_path) = implicit_path {
@@ -116,7 +118,7 @@ impl Resource {
 
 #[async_trait]
 impl Respond for Resource {
-    async fn respond<W>(self, context: &ServerContext, stream: &mut W) -> Result<()>
+    async fn respond<W>(self, context: &Context, stream: &mut W) -> Result<()>
     where
         W: AsyncWrite + Unpin + Send,
     {

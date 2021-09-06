@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use futures::AsyncWrite;
 use async_trait::async_trait;
 
-use crate::{ServerContext, Response, Result};
+use crate::{Context, Response, Result};
 use super::{ResourceContext, Respond};
 
 pub struct IndexResource {
@@ -15,7 +15,7 @@ pub struct IndexResource {
 
 #[async_trait]
 impl Respond for IndexResource {
-    async fn respond<W>(self, context: &ServerContext, stream: &mut W) -> Result<()>
+    async fn respond<W>(self, ctx: &Context, stream: &mut W) -> Result<()>
     where
         W: AsyncWrite + Unpin + Send,
     {
@@ -28,7 +28,7 @@ impl Respond for IndexResource {
             .last()
             .unwrap_or("/");
 
-        let html = context.hbs.render("index", &self.context)?;
+        let html = ctx.hbs().render("index", &self.context)?;
         
         let mut response = match url_path.ends_with("/") {
             true => Response::new(200),
@@ -39,23 +39,17 @@ impl Respond for IndexResource {
                 let mut response = Response::new(301);
 
                 // Tell client to redirect
-                response.set_header(
-                    "Location",
-                    vec![url_path.to_owned()]
-                );
+                response.set_header("Location", &[url_path.as_str()]);
 
                 // Tell client actual location of file
                 // TODO: For implicit index pages, give full file poth here
-                response.set_header(
-                    "Content-Location",
-                    vec![url_path.to_owned()]
-                );
+                response.set_header("Content-Location", &[url_path.as_str()]);
 
                 response
             }
         };
 
-        response.set_header("Content-Type", vec!["text/html; charset=UTF-8".to_owned()]);
+        response.set_header("Content-Type", &["text/html; charset=UTF-8"]);
         
         response.send_str(html.as_str(), stream).await
     }

@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use serde::{Serialize, Deserialize};
 use chrono::{DateTime, Utc};
 
-use crate::{ServerContext, Result};
+use crate::{Context, Result};
 
 pub const UNKNOWN: &'static str = "(unknown)";
 
@@ -119,7 +119,7 @@ impl ResourceMetadata {
 
 #[async_trait]
 pub trait Respond {
-    async fn respond<W>(self, context: &ServerContext, stream: &mut W) -> Result<()>
+    async fn respond<W>(self, context: &Context, stream: &mut W) -> Result<()>
     where
         W: AsyncWrite + Unpin + Send;
 }

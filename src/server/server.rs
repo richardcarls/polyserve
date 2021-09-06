@@ -2,15 +2,15 @@ use std::default::Default;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use async_native_tls::TlsAcceptor;
+use futures::StreamExt;
 use async_std::fs;
-use async_std::net::{TcpListener, ToSocketAddrs};
 use async_std::task;
-use futures::stream::StreamExt;
+use async_std::net::{TcpListener, ToSocketAddrs};
+
+use async_native_tls::TlsAcceptor;
 use handlebars::Handlebars;
 
-use super::ServerContext;
-use crate::{Error, ErrorKind, Response, Result};
+use crate::{Result, Error, ErrorKind, ServerContext};
 
 const INDEX_TEMPLATE: &'static str = include_str!("../index.html.hbs");
 
@@ -42,7 +42,7 @@ impl Server<Ready> {
         self.inner.root = root.to_owned();
     }
 
-    pub fn listen<'ctx>(self) -> Result<Server<Listening<'ctx>>> {
+    pub fn listen<'srv>(self) -> Result<()> {
         task::block_on(async {
             let addr = (self.inner.interface.as_str(), self.inner.port)
                 .to_socket_addrs()
@@ -58,8 +58,7 @@ impl Server<Ready> {
                 .ok_or(Error(ErrorKind::NoBindAddr))?;
 
             let root_dir = PathBuf::from(self.inner.root.as_str())
-                .canonicalize()
-                .map_err(|err| Error(ErrorKind::ResolveRootDir(err)))?;
+                .canonicalize()?;
 
             println!("Serving {} at {}", root_dir.display(), addr);
 
@@ -75,74 +74,65 @@ impl Server<Ready> {
                 let id_file = fs::File::open(id_path).await?;
 
                 // TODO: Identity file passwords besides empty string
-                Some(Arc::new(TlsAcceptor::new(id_file, "").await?))
+                Some(TlsAcceptor::new(id_file, "").await?)
             } else {
                 None
             };
 
-            let tcp_listener = TcpListener::bind(addr)
-                .await
-                .map_err(|err| Error(ErrorKind::BindAddr(err)))?;
+            let tcp_listener = TcpListener::bind(addr).await?;
 
-            let context = Arc::new(ServerContext { addr, root_dir, hbs });
+            let context = Arc::new(ServerContext {
+                addr,
+                root_dir,
+                hbs,
+                tcp_listener,
+                tls_acceptor,
+            });
 
             let server = Server {
                 inner: Listening {
                     ready_state: self.inner,
                     context,
-
-                    tls_acceptor,
-                    tcp_listener,
                 },
             };
 
-            server
-                .inner
-                .tcp_listener
+            server.inner.context.tcp_listener
                 .incoming()
                 .for_each_concurrent(None, |stream| async {
                     match stream {
-                        Ok(mut stream) => {
+                        Ok(stream) => {
                             let context = Arc::clone(&server.inner.context);
 
-                            if let Some(tls_acceptor) = &server.inner.tls_acceptor.clone() {
-                                let tls_stream = tls_acceptor.clone();
-                                
-                                task::spawn(async move {
-                                    match tls_stream.accept(stream).await {
-                                        Ok(mut tls_stream) => {
-                                            if let Err(err) = context.handle_connection(&mut tls_stream).await {
-                                                eprintln!("Unhandled Error: {:?}", err);
-        
-                                                let _ = Response::new(500).send_empty(&mut tls_stream).await;
-                                            }
-                                        },
-
-                                        Err(err) => eprintln!("Unhandled Error: {:?}", err),
+                            task::spawn(async move {
+                                if let Some(tls_acceptor) = &context.tls_acceptor {
+                                    if let Ok(tls_stream) = tls_acceptor.accept(&stream).await {
+                                        if let Err(err) = context.handle_incoming(tls_stream).await {
+                                            eprintln!("Uncaught error {:?}", err);
+                                        };
+                                    } else {
+                                        if let Err(err) = context.handle_incoming(&stream).await {
+                                            eprintln!("Uncaught error {:?}", err);
+                                        };
                                     }
-                                });
-                            } else {
-                                task::spawn(async move {
-                                    if let Err(err) = context.handle_connection(&mut stream).await {
-                                        eprintln!("Unhandled Error: {:?}", err);
-
-                                        let _ = Response::new(500).send_empty(&mut stream).await;
-                                    }
-                                });
-                            }
+                                } else {
+                                    if let Err(err) = context.handle_incoming(&stream).await {
+                                        eprintln!("Uncaught error {:?}", err);
+                                    };
+                                };
+                            });
                         },
 
                         Err(err) => eprintln!("Connection failed: {:?}", err),
                     }
                 })
                 .await;
-
-            Ok(server)
+            
+            Ok(())
         })
     }
 }
 
-impl<'ctx> Server<Listening<'ctx>> {
+impl<'srv> Server<Listening<'srv>> {
     pub fn disconnect(self) -> Server<Ready> {
         Server {
             inner: self.inner.ready_state,
@@ -169,12 +159,9 @@ impl Default for Ready {
     }
 }
 
-pub struct Listening<'ctx> {
+pub struct Listening<'srv> {
     ready_state: Ready,
-    context: Arc<ServerContext<'ctx>>,
-
-    tls_acceptor: Option<Arc<TlsAcceptor>>,
-    tcp_listener: TcpListener,
+    context: Arc<ServerContext<'srv>>,
 }
 
 pub trait ServerState {}

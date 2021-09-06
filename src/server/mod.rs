@@ -1,5 +1,6 @@
-mod server_context;
 mod server;
+mod context;
 
 pub use server::Server;
-pub use server_context::ServerContext;
+
+pub(crate) use context::ServerContext;
