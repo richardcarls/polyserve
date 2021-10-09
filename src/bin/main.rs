@@ -1,70 +1,23 @@
-use clap::Clap;
-use cascade::cascade;
+#![windows_subsystem = "console"]
 
-use polyserve::{ Server, Error as ServerError };
+use std::error::Error;
+use std::path::PathBuf;
 
-#[derive(Debug, Clap)]
-#[clap(name = "polyserve")]
-struct ServerOpt {
-    #[clap(
-        name = "ipv4",
-        long,
-        about = "Only bind over IPv4",
-    )]
-    ipv4: bool,
-    
-    // TODO: pnet crate, allow binf to literal interface by name
-    #[clap(
-        name = "interface",
-        short,
-        long,
-        about = "IP address or hostname to bind to.",
-        default_value = "::",
-        default_value_if("ipv4", None, "0.0.0.0"),
-    )]
-    interface: String,
+use async_std;
+use log;
+use simple_logger;
 
-    #[clap(
-        name = "port",
-        short,
-        long,
-        about = "The TCP port to listen on.",
-        default_value = "8080",
-    )]
-    port: u16,
+use polyserve::App;
 
-    #[clap(
-        name = "root",
-        about = "The root directory of the server.",
-    )]
-    root: Option<String>,
-}
+#[async_std::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    simple_logger::init_with_level(log::Level::Info).unwrap();
 
-fn main() {
-    std::process::exit(match run_server() {
-        Ok(_) => 0,
-        Err(err) => {
-            eprintln!("Server Error: {}", err);
-            1
-        }
-    });
-}
+    let app = App::default();
 
-fn run_server() -> Result<(), ServerError> {
-    let opt = ServerOpt::parse();
+    let root = PathBuf::from("./example-site");
 
-    let mut server = cascade! {
-        Server::new();
-        ..set_ipv4(opt.ipv4);
-        ..with_interface(opt.interface.as_str());
-        ..with_port(opt.port);
-    };
-
-    if let Some(root) = opt.root {
-        server.with_root(root.as_str());
-    }
-
-    server.listen()?;
+    app.listen("localhost:8080", root.as_path()).await?;
 
     Ok(())
 }

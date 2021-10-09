@@ -1,17 +1,13 @@
-mod common;
-mod error;
-mod server;
-mod context;
-mod request;
-mod response;
+#![cfg_attr(test, allow(dead_code, unused_imports, unused_variables))]
+
+mod app;
+mod poly_state;
+mod middleware;
+mod request_config;
 mod resource;
 
-pub use server::*;
-pub use error::Error;
+pub use app::App;
 
-use error::ErrorKind;
-use context::Context;
-use request::Request;
-use response::Response;
-
-pub type Result<T> = std::result::Result<T, Error>;
+use poly_state::PolyState;
+use request_config::{RequestConfig, ServerConfig};
+use resource::Resource;

@@ -16,15 +16,15 @@ path = "src/lib.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-futures = "0.3"
-async-std = "1.9"
-async-trait = "0.1.50"
-async-native-tls = "0.3.3"
-serde = { version = "1.0.128", features = ["derive"] }
-serde_json = "1.0.66"
+async-std = { version = "1.10.0", features = ["attributes"] }
+async-trait = "0.1.51"
+serde = { version = "1.0.130", features = ["derive"] }
+log = "0.4.14"
+simple_logger = "1.13.0"
+roa = { version = "0.5", features = ["tcp", "tls"] }
+config = "0.11.0"
+urlencoding = "2.1.0"
 mime = "0.3.16"
 mime_guess = "2.0.3"
 chrono = "0.4.19"
-handlebars = "4.1.1"
-cascade = "1.0.0"
-clap = { git = "https://github.com/clap-rs/clap/" }
+handlebars = "4.1.3"
