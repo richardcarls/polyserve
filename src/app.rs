@@ -12,6 +12,7 @@ use roa::tls::internal::pemfile::{certs, pkcs8_private_keys};
 use crate::PolyState;
 use crate::middleware;
 
+// TODO: Remove roa dependency (use hyper directly, refactor middleware fns)
 pub struct App {}
 
 impl App {

@@ -1,9 +1,13 @@
 [package]
 name = "polyserve"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Richard Carls <richard.j.carls@gmail.com>"]
 license = "MIT OR Apache-2.0"
 edition = "2018"
+repository = "https://github.com/richardcarls/polyserve/"
+description = "Toy HTTP server built in Rust on top of roa (https://github.com/Hexilee/roa)"
+keywords = ["http", "server"]
+publish = false
 
 [[bin]]
 name = "polyserve"
@@ -28,3 +32,4 @@ mime = "0.3.16"
 mime_guess = "2.0.3"
 chrono = "0.4.19"
 handlebars = "4.1.3"
+clap = { git = "https://github.com/clap-rs/clap/" }
