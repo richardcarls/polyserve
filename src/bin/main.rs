@@ -3,7 +3,7 @@
 use std::error::Error;
 use std::path::PathBuf;
 
-use clap::{AppSettings, Parser, ValueHint};
+use clap::{Parser, ValueHint};
 
 use polyserve::App;
 
@@ -22,10 +22,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 #[derive(Parser)]
 #[clap(name = "polyserve", version, author, about)]
-#[clap(setting = AppSettings::ColoredHelp)]
+#[clap()]
 struct Opts {
     /// Bind to port on interface
-    #[clap(short, long, default_value = "8080", env = "POLYSERVE_PORT")]
+    #[clap(short, long, default_value = "8080")]
     port: u16,
 
     /// Web root to serve from
@@ -34,7 +34,6 @@ struct Opts {
         default_value = ".",
         parse(from_os_str),
         value_hint = ValueHint::DirPath,
-        env = "POLYSERVE_ROOT"
     )]
     root: PathBuf,
 }
