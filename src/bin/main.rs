@@ -11,7 +11,11 @@ use polyserve::App;
 async fn main() -> Result<(), Box<dyn Error>> {
     let opts: Opts = Opts::parse();
 
-    simple_logger::init_with_level(log::Level::Info).unwrap();
+    simple_logger::SimpleLogger::new()
+        .with_level(log::LevelFilter::Info)
+        .with_utc_timestamps()
+        .init()
+        .unwrap();
 
     let app = App::default();
 
@@ -22,10 +26,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 #[derive(Parser)]
 #[clap(name = "polyserve", version, author, about)]
-#[clap()]
 struct Opts {
     /// Bind to port on interface
-    #[clap(short, long, default_value = "8080")]
+    #[clap(short, long, default_value = "3000")]
     port: u16,
 
     /// Web root to serve from
