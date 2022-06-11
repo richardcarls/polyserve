@@ -11,11 +11,7 @@ use polyserve::App;
 async fn main() -> Result<(), Box<dyn Error>> {
     let opts: Opts = Opts::parse();
 
-    simple_logger::SimpleLogger::new()
-        .with_level(log::LevelFilter::Info)
-        .with_utc_timestamps()
-        .init()
-        .unwrap();
+    env_logger::init();
 
     let app = App::default();
 

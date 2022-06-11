@@ -1,3 +1,4 @@
+mod logger;
 mod early_return;
 mod server_header;
 mod allow_methods;
@@ -9,6 +10,7 @@ mod hbs;
 mod auto_index;
 mod resolve_resource;
 
+pub use logger::logger;
 pub use early_return::early_return;
 pub use server_header::server_header;
 pub use allow_methods::allow_methods;

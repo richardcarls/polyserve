@@ -34,7 +34,6 @@ impl RequestConfig {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct ServerConfig {
-    pub test: String,
     pub force_trailing_slash: bool,
     pub allow_extension_elision: Vec<String>,
     pub use_index: bool,

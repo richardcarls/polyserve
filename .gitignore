@@ -3,3 +3,4 @@
 /example-site
 
 .projectile
+Cargo.lock

@@ -61,7 +61,7 @@ impl App {
 
         let app = roa::App::state(state)
             // TODO: Custom logger middleware
-            .gate(roa::logger::logger)
+            .gate(middleware::logger)
             .gate(middleware::early_return)
             .gate(middleware::server_header)
             .gate(middleware::resolve_resource)

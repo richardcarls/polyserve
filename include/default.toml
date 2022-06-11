@@ -1,6 +1,6 @@
 [server]
 force_trailing_slash = true # Force trailing slash redirect on directory match
-allow_extension_elision = ["html", "hbs"] # Will attempt to resolve files with the given extensions from an extensionless URI
+allow_extension_elision = ["html", "hbs", "html.hbs"] # Will attempt to resolve files with the given extensions from an extensionless URI
 use_index = true # Serve index files if they exist
 auto_index = true # Generate index pages if they do not exist
 allow_methods = ["GET", "OPTIONS"]

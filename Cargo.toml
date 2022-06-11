@@ -1,6 +1,6 @@
 [package]
 name = "polyserve"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Richard Carls <richard.j.carls@gmail.com>"]
 license = "MIT OR Apache-2.0"
 edition = "2018"
@@ -24,7 +24,7 @@ async-std = { version = "1.10.0", features = ["attributes"] }
 async-trait = "0.1.51"
 serde = { version = "1.0.130", features = ["derive"] }
 log = "0.4.14"
-simple_logger = "1.13.0"
+env_logger = "0.9"
 roa = { version = "0.5", features = ["tcp", "tls"] }
 config = "0.11.0"
 urlencoding = "2.1.0"
