@@ -1,9 +1,9 @@
 use std::io;
 use std::fs;
 use std::net::ToSocketAddrs;
-use std::error::Error as StdError;
 use std::path::{PathBuf, Path};
 
+use anyhow::{anyhow, Result};
 use roa;
 use roa::preload::*;
 use roa::tls::{TlsListener, ServerConfig, NoClientAuth};
@@ -16,11 +16,16 @@ use crate::middleware;
 pub struct App {}
 
 impl App {
-    pub async fn listen(&self, interface: impl ToSocketAddrs, root_path: &Path) -> Result<(), Box<dyn StdError>> {
+    pub async fn listen(
+        &self,
+        interface: impl ToSocketAddrs,
+        ipv4: bool,
+        root_path: &Path,
+    ) -> Result<()> {
         let addr = interface
             .to_socket_addrs()?
-            .find(|addr| addr.is_ipv4())
-            .unwrap();
+            .find(|addr| addr.is_ipv4() == ipv4)
+            .ok_or(anyhow!("No bind address."))?;
         
         let root = PathBuf::from(root_path).canonicalize()?;
 
